@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Dashboard Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login-page" class="login-page">
+        <div class="login-container">
+            <div class="login-logo">
+                <div class="logo-icon">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <h1>IT Dashboard</h1>
+                <p>Quản lý mạng nội bộ</p>
+            </div>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="username"><i class="fas fa-user"></i> Tên đăng nhập</label>
+                    <input type="text" id="username" placeholder="Nhập tên đăng nhập" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> Mật khẩu</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="password" placeholder="Nhập mật khẩu" required autocomplete="current-password">
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="remember-me"> Ghi nhớ đăng nhập
+                    </label>
+                </div>
+                <button type="submit" class="btn-login" id="login-btn">
+                    <span>Đăng nhập</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <div id="login-error" class="login-error hidden"></div>
+            </form>
+            <div class="login-footer">
+                <p>&copy; 2026 IT Department - Internal Use Only</p>
+            </div>
+        </div>
+        <div class="login-bg-particles"></div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="app hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <i class="fas fa-shield-halved"></i>
+                    <span class="sidebar-title">IT Dashboard</span>
+                </div>
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#devices" class="nav-item" data-page="devices">
+                    <i class="fas fa-server"></i>
+                    <span>Thiết bị</span>
+                </a>
+                <a href="#scan" class="nav-item" data-page="scan">
+                    <i class="fas fa-network-wired"></i>
+                    <span>Quét mạng</span>
+                </a>
+                <a href="#remote" class="nav-item" data-page="remote">
+                    <i class="fas fa-terminal"></i>
+                    <span>Remote Control</span>
+                </a>
+                <a href="#ad" class="nav-item" data-page="ad">
+                    <i class="fas fa-users-gear"></i>
+                    <span>Active Directory</span>
+                </a>
+                <a href="#settings" class="nav-item" data-page="settings">
+                    <i class="fas fa-gear"></i>
+                    <span>Cài đặt</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div class="user-details">
+                        <span id="current-user" class="user-name">Admin</span>
+                        <span class="user-role">Quản trị viên</span>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="App.logout()" title="Đăng xuất">
+                    <i class="fas fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="top-bar-left">
+                    <h2 id="page-title">Dashboard</h2>
+                </div>
+                <div class="top-bar-right">
+                    <div class="search-global">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Tìm kiếm...">
+                    </div>
+                    <div class="notification-bell">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge">3</span>
+                    </div>
+                    <div class="server-time">
+                        <i class="fas fa-clock"></i>
+                        <span id="server-time"></span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Container -->
+            <div id="page-container" class="page-container">
+
+                <!-- ========== DASHBOARD PAGE ========== -->
+                <div id="page-dashboard" class="page active">
+                    <div class="stats-grid">
+                        <div class="stat-card stat-total">
+                            <div class="stat-icon"><i class="fas fa-desktop"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-total">0</span>
+                                <span class="stat-label">Tổng thiết bị</span>
+                            </div>
+                            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> 12%</div>
+                        </div>
+                        <div class="stat-card stat-online">
+                            <div class="stat-icon"><i class="fas fa-signal"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-online">0</span>
+                                <span class="stat-label">Đang Online</span>
+                            </div>
+                            <div class="stat-trend up"><i class="fas fa-check-circle"></i> Bình thường</div>
+                        </div>
+                        <div class="stat-card stat-offline">
+                            <div class="stat-icon"><i class="fas fa-power-off"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-offline">0</span>
+                                <span class="stat-label">Đang Offline</span>
+                            </div>
+                            <div class="stat-trend down"><i class="fas fa-exclamation-triangle"></i> Cần kiểm tra</div>
+                        </div>
+                        <div class="stat-card stat-types">
+                            <div class="stat-icon"><i class="fas fa-tags"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-types">0</span>
+                                <span class="stat-label">Loại thiết bị</span>
+                            </div>
+                            <div class="stat-trend neutral"><i class="fas fa-list"></i> Phân loại</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-pie"></i> Trạng thái thiết bị</h3>
+                                <button class="btn-refresh" onclick="App.refreshDashboard()"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                            <div class="chart-body">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-bar"></i> Thiết bị theo loại</h3>
+                                <button class="btn-refresh" onclick="App.refreshDashboard()"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                            <div class="chart-body">
+                                <canvas id="typeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card activity-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-clock-rotate-left"></i> Hoạt động gần đây</h3>
+                            <button class="btn-outline" onclick="App.refreshDashboard()">
+                                <i class="fas fa-sync-alt"></i> Làm mới
+                            </button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>Thiết bị</th>
+                                        <th>Hoạt động</th>
+                                        <th>Người thực hiện</th>
+                                        <th>Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activity-table-body">
+                                    <tr>
+                                        <td colspan="5" class="empty-state">
+                                            <i class="fas fa-inbox"></i>
+                                            <p>Đang tải dữ liệu...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== DEVICES PAGE ========== -->
+                <div id="page-devices" class="page">
+                    <div class="page-toolbar">
+                        <div class="toolbar-left">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="device-search" placeholder="Tìm kiếm theo IP, Hostname, MAC..." oninput="App.filterDevices()">
+                            </div>
+                            <select id="device-status-filter" class="filter-select" onchange="App.filterDevices()">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="online">Online</option>
+                                <option value="offline">Offline</option>
+                            </select>
+                            <select id="device-type-filter" class="filter-select" onchange="App.filterDevices()">
+                                <option value="">Tất cả loại</option>
+                                <option value="workstation">Workstation</option>
+                                <option value="server">Server</option>
+                                <option value="printer">Printer</option>
+                                <option value="switch">Switch</option>
+                                <option value="router">Router</option>
+                                <option value="access_point">Access Point</option>
+                                <option value="other">Khác</option>
+                            </select>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="btn-primary" onclick="App.refreshDevices()">
+                                <i class="fas fa-sync-alt"></i> Làm mới
+                            </button>
+                            <label class="auto-refresh-toggle">
+                                <input type="checkbox" id="auto-refresh-toggle" checked onchange="App.toggleAutoRefresh()">
+                                <span>Tự động làm mới (30s)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-wrapper">
+                            <table class="data-table" id="devices-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" onclick="App.sortDevices('ip')">IP <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" onclick="App.sortDevices('hostname')">Hostname <i class="fas fa-sort"></i></th>
+                                        <th>MAC</th>
+                                        <th class="sortable" onclick="App.sortDevices('status')">Trạng thái <i class="fas fa-sort"></i></th>
+                                        <th class="sortable" onclick="App.sortDevices('type')">Loại <i class="fas fa-sort"></i></th>
+                                        <th>Đăng nhập</th>
+                                        <th class="sortable" onclick="App.sortDevices('last_seen')">Lần cuối Online <i class="fas fa-sort"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="devices-table-body">
+                                    <tr>
+                                        <td colspan="7" class="empty-state">
+                                            <div class="loading-spinner"></div>
+                                            <p>Đang tải danh sách thiết bị...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="table-footer">
+                            <span id="device-count">0 thiết bị</span>
+                            <div class="pagination" id="device-pagination"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== SCAN NETWORK PAGE ========== -->
+                <div id="page-scan" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-network-wired"></i> Quét mạng</h3>
+                        </div>
+                        <div class="scan-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="scan-start-ip">Địa chỉ IP bắt đầu</label>
+                                    <input type="text" id="scan-start-ip" placeholder="Ví dụ: 192.168.1.1" class="ip-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="scan-end-ip">Địa chỉ IP kết thúc</label>
+                                    <input type="text" id="scan-end-ip" placeholder="Ví dụ: 192.168.1.254" class="ip-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="scan-method">Phương thức quét</label>
+                                    <select id="scan-method" class="filter-select">
+                                        <option value="ping">Ping Sweep</option>
+                                        <option value="arp">ARP Scan</option>
+                                        <option value="tcp">TCP Port Scan</option>
+                                    </select>
+                                </div>
+                                <div class="form-group scan-actions">
+                                    <button class="btn-primary btn-scan" id="btn-start-scan" onclick="App.startScan()">
+                                        <i class="fas fa-radar"></i> Bắt đầu quét
+                                    </button>
+                                    <button class="btn-danger btn-scan hidden" id="btn-stop-scan" onclick="App.stopScan()">
+                                        <i class="fas fa-stop"></i> Dừng quét
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="scan-progress-section" class="scan-progress-section hidden">
+                            <div class="progress-info">
+                                <span id="scan-status-text">Đang quét...</span>
+                                <span id="scan-progress-pct">0%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="scan-progress-bar" style="width: 0%"></div>
+                            </div>
+                            <div class="scan-stats">
+                                <span><i class="fas fa-globe"></i> Đã quét: <strong id="scan-scanned">0</strong></span>
+                                <span><i class="fas fa-check-circle online"></i> Tìm thấy: <strong id="scan-found">0</strong></span>
+                                <span><i class="fas fa-clock"></i> Thời gian: <strong id="scan-elapsed">0s</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card hidden" id="scan-results-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-list-check"></i> Kết quả quét</h3>
+                            <button class="btn-primary" onclick="App.addScanResultsToDevices()">
+                                <i class="fas fa-plus"></i> Thêm vào danh sách thiết bị
+                            </button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="scan-select-all" onchange="App.toggleScanSelectAll()"></th>
+                                        <th>IP</th>
+                                        <th>Hostname</th>
+                                        <th>MAC</th>
+                                        <th>Trạng thái</th>
+                                        <th>Loại</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scan-results-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== REMOTE CONTROL PAGE ========== -->
+                <div id="page-remote" class="page">
+                    <div class="remote-layout">
+                        <div class="card remote-sidebar">
+                            <div class="card-header">
+                                <h3><i class="fas fa-server"></i> Chọn thiết bị</h3>
+                            </div>
+                            <div class="remote-device-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="remote-device-search" placeholder="Tìm thiết bị..." oninput="App.filterRemoteDevices()">
+                            </div>
+                            <div class="remote-device-list" id="remote-device-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p>Đang tải...</p>
+                                </div>
+                            </div>
+                            <div class="remote-actions">
+                                <button class="btn-outline btn-full" onclick="App.openRemoteDesktop()">
+                                    <i class="fas fa-desktop"></i> Remote Desktop
+                                </button>
+                                <button class="btn-outline btn-full" onclick="App.openFileCopy()">
+                                    <i class="fas fa-copy"></i> Copy Files
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card remote-main">
+                            <div class="card-header">
+                                <h3><i class="fas fa-terminal"></i> Remote Command</h3>
+                                <span id="remote-device-name" class="remote-device-label">Chưa chọn thiết bị</span>
+                            </div>
+                            <div class="terminal-container">
+                                <div class="terminal-output" id="terminal-output">
+                                    <div class="terminal-welcome">
+                                        <pre>
+ ____  _____ _____ ____     ___        __     ____
+|  _ \| ____|_   _|  _ \   / \ \      / /    |  _ \
+| |_) |  _|   | | | |_) | / _ \ \ /\ / /     | | | |
+|  _ <| |___  | | |  _ &lt; / ___ \ V  V /      | |_| |
+|_| \_\_____| |_| |_| \_/_/   \_\_/\_/       |____/
+                                        </pre>
+                                        <p>Remote Control Console - Nhập lệnh để thực thi trên thiết bị</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="terminal-input-area">
+                                <span class="terminal-prompt">$&gt;</span>
+                                <input type="text" id="terminal-input" class="terminal-input" placeholder="Nhập lệnh..." 
+                                    onkeypress="if(event.key==='Enter') App.executeCommand()">
+                                <button class="btn-primary btn-execute" onclick="App.executeCommand()" id="btn-execute-cmd">
+                                    <i class="fas fa-play"></i> Thực thi
+                                </button>
+                                <button class="btn-danger btn-execute hidden" id="btn-stop-cmd" onclick="App.stopCommand()">
+                                    <i class="fas fa-stop"></i> Dừng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== ACTIVE DIRECTORY PAGE ========== -->
+                <div id="page-ad" class="page">
+                    <div class="card">
+                        <div class="ad-tabs">
+                            <button class="ad-tab active" data-tab="computers" onclick="App.switchADTab('computers')">
+                                <i class="fas fa-desktop"></i> Computers
+                            </button>
+                            <button class="ad-tab" data-tab="users" onclick="App.switchADTab('users')">
+                                <i class="fas fa-users"></i> Users
+                            </button>
+                            <button class="ad-tab" data-tab="groups" onclick="App.switchADTab('groups')">
+                                <i class="fas fa-user-group"></i> Groups
+                            </button>
+                        </div>
+                        <div class="ad-toolbar">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="ad-search" placeholder="Tìm kiếm trong Active Directory..." 
+                                    onkeypress="if(event.key==='Enter') App.searchAD()">
+                            </div>
+                            <button class="btn-primary" onclick="App.searchAD()">
+                                <i class="fas fa-magnifying-glass"></i> Tìm kiếm
+                            </button>
+                            <button class="btn-outline" onclick="App.refreshAD()">
+                                <i class="fas fa-sync-alt"></i> Làm mới
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AD Computers Tab -->
+                    <div id="ad-tab-computers" class="ad-tab-content active">
+                        <div class="card">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên máy</th>
+                                            <th>Địa chỉ IP</th>
+                                            <th>Hệ điều hành</th>
+                                            <th>Ngày đăng nhập cuối</th>
+                                            <th>Trạng thái</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ad-computers-body">
+                                        <tr>
+                                            <td colspan="6" class="empty-state">
+                                                <div class="loading-spinner"></div>
+                                                <p>Đang tải dữ liệu AD...</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AD Users Tab -->
+                    <div id="ad-tab-users" class="ad-tab-content">
+                        <div class="card">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên đăng nhập</th>
+                                            <th>Họ tên</th>
+                                            <th>Email</th>
+                                            <th>Phòng ban</th>
+                                            <th>Trạng thái</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ad-users-body">
+                                        <tr>
+                                            <td colspan="6" class="empty-state">
+                                                <p>Chưa có dữ liệu</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AD Groups Tab -->
+                    <div id="ad-tab-groups" class="ad-tab-content">
+                        <div class="card">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên nhóm</th>
+                                            <th>Mô tả</th>
+                                            <th>Số thành viên</th>
+                                            <th>Loại</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ad-groups-body">
+                                        <tr>
+                                            <td colspan="5" class="empty-state">
+                                                <p>Chưa có dữ liệu</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AD Detail Panel -->
+                    <div id="ad-detail-panel" class="ad-detail-panel hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 id="ad-detail-title"><i class="fas fa-info-circle"></i> Chi tiết</h3>
+                                <button class="btn-outline" onclick="App.closeADDetail()">
+                                    <i class="fas fa-times"></i> Đóng
+                                </button>
+                            </div>
+                            <div id="ad-detail-content" class="ad-detail-content"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== SETTINGS PAGE ========== -->
+                <div id="page-settings" class="page">
+                    <div class="settings-grid">
+                        <!-- Scan Settings -->
+                        <div class="card settings-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-network-wired"></i> Cài đặt quét mạng</h3>
+                            </div>
+                            <div class="settings-body">
+                                <div class="form-group">
+                                    <label>Chu kỳ quét tự động (phút)</label>
+                                    <input type="number" id="setting-scan-interval" value="30" min="5" max="1440">
+                                </div>
+                                <div class="form-group">
+                                    <label>Địa chỉ mạng mặc định</label>
+                                    <input type="text" id="setting-default-network" placeholder="Ví dụ: 192.168.1.0/24">
+                                </div>
+                                <div class="form-group">
+                                    <label>Số lần thử lại khi mất kết nối</label>
+                                    <input type="number" id="setting-retry-count" value="3" min="1" max="10">
+                                </div>
+                                <div class="form-group">
+                                    <label>Thời gian timeout (giây)</label>
+                                    <input type="number" id="setting-timeout" value="5" min="1" max="60">
+                                </div>
+                                <button class="btn-primary" onclick="App.saveScanSettings()">
+                                    <i class="fas fa-save"></i> Lưu cài đặt
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- AD Settings -->
+                        <div class="card settings-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-users-gear"></i> Active Directory</h3>
+                            </div>
+                            <div class="settings-body">
+                                <div class="form-group">
+                                    <label>AD Server (LDAP)</label>
+                                    <input type="text" id="setting-ad-server" placeholder="Ví dụ: ldap://192.168.1.10">
+                                </div>
+                                <div class="form-group">
+                                    <label>Base DN</label>
+                                    <input type="text" id="setting-ad-base-dn" placeholder="Ví dụ: DC=company,DC=local">
+                                </div>
+                                <div class="form-group">
+                                    <label>Bind DN</label>
+                                    <input type="text" id="setting-ad-bind-dn" placeholder="Ví dụ: CN=admin,DC=company,DC=local">
+                                </div>
+                                <div class="form-group">
+                                    <label>Mật khẩu Bind DN</label>
+                                    <input type="password" id="setting-ad-password" placeholder="Nhập mật khẩu">
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="setting-ad-sync" checked> Đồng bộ tự động
+                                    </label>
+                                </div>
+                                <button class="btn-primary" onclick="App.saveADSettings()">
+                                    <i class="fas fa-save"></i> Lưu cài đặt
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- User Management -->
+                        <div class="card settings-card full-width">
+                            <div class="card-header">
+                                <h3><i class="fas fa-users-cog"></i> Quản lý người dùng</h3>
+                                <button class="btn-primary" onclick="App.showAddUserModal()">
+                                    <i class="fas fa-plus"></i> Thêm người dùng
+                                </button>
+                            </div>
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên đăng nhập</th>
+                                            <th>Họ tên</th>
+                                            <th>Vai trò</th>
+                                            <th>Trạng thái</th>
+                                            <th>Lần đăng nhập cuối</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body">
+                                        <tr>
+                                            <td>admin</td>
+                                            <td>Quản trị viên</td>
+                                            <td><span class="badge badge-admin">Admin</span></td>
+                                            <td><span class="status-dot online"></span> Hoạt động</td>
+                                            <td>2026-06-20 08:00:00</td>
+                                            <td>
+                                                <button class="btn-icon" title="Chỉnh sửa"><i class="fas fa-pen"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Device Detail Modal -->
+    <div id="device-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="App.closeDeviceModal()"></div>
+        <div class="modal-container modal-large">
+            <div class="modal-header">
+                <h3 id="modal-device-title"><i class="fas fa-server"></i> Chi tiết thiết bị</h3>
+                <button class="modal-close" onclick="App.closeDeviceModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="device-detail-tabs">
+                    <button class="device-tab active" onclick="App.switchDeviceTab('info')" data-tab="info">
+                        <i class="fas fa-circle-info"></i> Thông tin
+                    </button>
+                    <button class="device-tab" onclick="App.switchDeviceTab('ports')" data-tab="ports">
+                        <i class="fas fa-door-open"></i> Ports
+                    </button>
+                    <button class="device-tab" onclick="App.switchDeviceTab('software')" data-tab="software">
+                        <i class="fas fa-box-open"></i> Phần mềm
+                    </button>
+                    <button class="device-tab" onclick="App.switchDeviceTab('actions')" data-tab="actions">
+                        <i class="fas fa-bolt"></i> Hành động
+                    </button>
+                </div>
+                <div class="device-tab-content active" id="device-tab-info">
+                    <div class="detail-grid" id="device-info-grid"></div>
+                </div>
+                <div class="device-tab-content" id="device-tab-ports">
+                    <div class="table-wrapper">
+                        <table class="data-table" id="device-ports-table">
+                            <thead>
+                                <tr>
+                                    <th>Port</th>
+                                    <th>Giao thức</th>
+                                    <th>Trạng thái</th>
+                                    <th>Dịch vụ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="device-ports-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="device-tab-content" id="device-tab-software">
+                    <div class="table-wrapper">
+                        <table class="data-table" id="device-software-table">
+                            <thead>
+                                <tr>
+                                    <th>Tên phần mềm</th>
+                                    <th>Phiên bản</th>
+                                    <th>Nhà phát triển</th>
+                                    <th>Ngày cài đặt</th>
+                                    <th>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="device-software-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="device-tab-content" id="device-tab-actions">
+                    <div class="actions-grid" id="device-actions-grid">
+                        <button class="action-card" onclick="App.deviceAction('remote-desktop')">
+                            <i class="fas fa-desktop"></i>
+                            <span>Remote Desktop</span>
+                            <p>Kết nối điều khiển từ xa</p>
+                        </button>
+                        <button class="action-card" onclick="App.deviceAction('command')">
+                            <i class="fas fa-terminal"></i>
+                            <span>Execute Command</span>
+                            <p>Thực thi lệnh từ xa</p>
+                        </button>
+                        <button class="action-card" onclick="App.deviceAction('install-software')">
+                            <i class="fas fa-download"></i>
+                            <span>Cài đặt phần mềm</span>
+                            <p>Cài đặt từ máy chủ</p>
+                        </button>
+                        <button class="action-card" onclick="App.deviceAction('uninstall-software')">
+                            <i class="fas fa-trash-can"></i>
+                            <span>Gỡ bỏ phần mềm</span>
+                            <p>Gỡ cài đặt phần mềm</p>
+                        </button>
+                        <button class="action-card" onclick="App.deviceAction('copy-file')">
+                            <i class="fas fa-file-import"></i>
+                            <span>Copy Files</span>
+                            <p>Sao chép file đến thiết bị</p>
+                        </button>
+                        <button class="action-card action-warning" onclick="App.deviceAction('firewall')">
+                            <i class="fas fa-shield-halved"></i>
+                            <span>Bật/Tắt Firewall</span>
+                            <p>Quản lý tường lửa</p>
+                        </button>
+                        <button class="action-card action-info" onclick="App.deviceAction('windows-update')">
+                            <i class="fas fa-rotate"></i>
+                            <span>Windows Update</span>
+                            <p>Khởi động cập nhật</p>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div id="confirm-dialog" class="modal hidden">
+        <div class="modal-overlay" onclick="App.closeConfirmDialog()"></div>
+        <div class="modal-container modal-small">
+            <div class="modal-header" id="confirm-dialog-header">
+                <h3><i class="fas fa-triangle-exclamation"></i> Xác nhận</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-dialog-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="App.closeConfirmDialog()">Hủy</button>
+                <button class="btn-primary" id="confirm-dialog-ok" onclick="App.confirmDialogAction()">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
