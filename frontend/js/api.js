@@ -76,8 +76,8 @@ class APIClient {
     // AUTH API
     // ================================================================
 
-    async login(username, password) {
-        const data = await this.post('/api/auth/login', { username, password });
+    async login(username, password, mode = 'standalone', domain = '') {
+        const data = await this.post('/api/auth/login', { username, password, mode, domain });
         if (data && data.token) {
             this.token = data.token;
             localStorage.setItem('auth_token', data.token);

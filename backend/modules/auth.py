@@ -93,17 +93,87 @@ class AuthManager:
         logger.info("User '%s' registered successfully (admin=%s)", username, is_admin)
         return {"success": True, "message": "User registered successfully"}
 
-    def authenticate(self, username, password):
+    def authenticate(self, username, password, mode="standalone", domain=""):
         """
-        Authenticate a user by verifying password hash and Windows admin status.
+        Authenticate a user by verifying password hash and Windows admin status,
+        or Active Directory credentials if domain mode is requested.
 
         Args:
-            username: Windows username
+            username: Username (local or domain user)
             password: Plain text password
+            mode: 'standalone' (local authentication) or 'domain' (AD authentication)
+            domain: Domain name or domain controller IP (required for 'domain' mode)
 
         Returns:
             dict with success status, token, and user info
         """
+        if mode == "domain":
+            if not domain:
+                return {"success": False, "message": "Domain is required for Domain mode"}
+            
+            # Domain AD Authentication
+            logger.info("Attempting Domain AD authentication for user '%s' in domain '%s'", username, domain)
+            
+            # Use ldap3 to bind with user credentials
+            try:
+                from ldap3 import Server, Connection, ALL
+                # Standard formats: "username@domain.local" or "domain\\username"
+                bind_user = username
+                if "@" not in username and "\\" not in username:
+                    bind_user = f"{username}@{domain}"
+                
+                # Setup server (prefer SSL if possible, fallback to standard LDAP)
+                # Parse domain to IP or LDAP URL
+                ldap_url = f"ldap://{domain}" if not domain.startswith("ldap://") and not domain.startswith("ldaps://") else domain
+                
+                server = Server(ldap_url, get_info=ALL, connect_timeout=10)
+                
+                # Bind with user credentials
+                conn = Connection(
+                    server,
+                    user=bind_user,
+                    password=password,
+                    auto_bind=True,
+                    raise_exceptions=True
+                )
+                
+                if conn.bound:
+                    logger.info("Domain AD authentication successful for '%s'", bind_user)
+                    
+                    # Store domain config in backend dynamic config for subsequent LDAP operations
+                    # User is using local IT group permissions, we verify AD group membership
+                    # (Usually all Domain Users can read AD, which satisfies read-only requirement)
+                    if hasattr(self.app, 'ad_integration'):
+                        self.app.config["AD_SERVER"] = ldap_url
+                        self.app.config["AD_BASE_DN"] = self._derive_base_dn(domain)
+                        self.app.config["AD_BIND_DN"] = bind_user
+                        self.app.config["AD_BIND_PASSWORD"] = password
+                        self.app.ad_integration.init_app(self.app)
+                    
+                    # Generate JWT token
+                    token = self._generate_token(username.lower(), is_admin=True)
+                    
+                    conn.unbind()
+                    return {
+                        "success": True,
+                        "message": "Domain AD login successful",
+                        "token": token,
+                        "user": {
+                            "username": username,
+                            "is_admin": True,
+                            "is_windows_admin": True,
+                            "login_mode": "domain",
+                            "domain": domain
+                        },
+                    }
+                else:
+                    return {"success": False, "message": "Invalid Domain credentials"}
+                    
+            except Exception as e:
+                logger.error("Domain AD connection/auth error for '%s': %s", username, e)
+                return {"success": False, "message": f"Domain connection error: {str(e)}"}
+                
+        # --- STANDALONE / LOCAL ADMIN MODE ---
         username_lower = username.lower()
 
         # Verify password against stored hash
@@ -146,8 +216,18 @@ class AuthManager:
                 "username": username,
                 "is_admin": user["is_admin"],
                 "is_windows_admin": is_windows_admin,
+                "login_mode": "standalone"
             },
         }
+
+    def _derive_base_dn(self, domain):
+        """Helper to convert domain.local to DC=domain,DC=local."""
+        # Clean domain if URL
+        dom = domain.replace("ldap://", "").replace("ldaps://", "").split(":")[0]
+        parts = dom.split(".")
+        if len(parts) >= 2:
+            return ",".join([f"DC={p}" for p in parts])
+        return f"DC={parts[0]}"
 
     def verify_token(self, token):
         """

@@ -66,6 +66,7 @@ def create_app():
     ad = ADIntegration()
     ad.init_app(app)
     app.ad = ad
+    app.ad_integration = ad
 
     logger.info("IT Dashboard backend initialized")
 
@@ -111,11 +112,13 @@ def create_app():
 
         username = data.get("username", "").strip()
         password = data.get("password", "")
+        mode = data.get("mode", "standalone")
+        domain = data.get("domain", "").strip()
 
         if not username or not password:
             return jsonify({"success": False, "message": "Username and password required"}), 400
 
-        result = auth_manager.authenticate(username, password)
+        result = auth_manager.authenticate(username, password, mode=mode, domain=domain)
 
         if result["success"]:
             session["token"] = result["token"]

@@ -19,7 +19,35 @@
                 <h1>IT Dashboard</h1>
                 <p>Quản lý mạng nội bộ</p>
             </div>
+
+            <!-- Login Mode Tabs -->
+            <div class="login-mode-tabs">
+                <button class="login-mode-tab active" data-mode="standalone" onclick="switchLoginMode('standalone')">
+                    <i class="fas fa-laptop"></i>
+                    <span>Mạng thường</span>
+                    <small>Không cần Domain</small>
+                </button>
+                <button class="login-mode-tab" data-mode="domain" onclick="switchLoginMode('domain')">
+                    <i class="fas fa-building"></i>
+                    <span>Mạng công ty</span>
+                    <small>Có Domain AD</small>
+                </button>
+            </div>
+
             <form id="login-form" class="login-form">
+                <!-- Mode indicator -->
+                <div id="login-mode-info" class="login-mode-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Đăng nhập bằng tài khoản Administrator Local — dùng để Scan/Remote trong mạng thường</span>
+                </div>
+
+                <!-- Domain field (hidden by default) -->
+                <div class="form-group" id="domain-field" style="display:none">
+                    <label for="domain"><i class="fas fa-building"></i> Domain</label>
+                    <input type="text" id="domain" placeholder="Ví dụ: company.local hoặc 192.168.1.10" autocomplete="off">
+                    <small class="field-hint">Nhập tên domain hoặc IP của Domain Controller</small>
+                </div>
+
                 <div class="form-group">
                     <label for="username"><i class="fas fa-user"></i> Tên đăng nhập</label>
                     <input type="text" id="username" placeholder="Nhập tên đăng nhập" required autocomplete="username">

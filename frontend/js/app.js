@@ -41,6 +41,21 @@ const App = {
                 if (userData) {
                     const user = JSON.parse(userData);
                     document.getElementById('current-user').textContent = user.username || 'Admin';
+                    
+                    // Restore sidebar state
+                    const mode = user.login_mode || 'standalone';
+                    const domain = user.domain || '';
+                    const userRole = document.querySelector('.user-role');
+                    if (userRole) {
+                        userRole.textContent = mode === 'domain'
+                            ? `Domain: ${domain}`
+                            : 'Quản trị viên (Local)';
+                    }
+                    
+                    const adNav = document.querySelector('a[data-page="ad"]');
+                    if (adNav) {
+                        adNav.style.display = mode === 'domain' ? '' : 'none';
+                    }
                 }
                 this.showApp();
             } catch (e) {
@@ -83,9 +98,17 @@ const App = {
         const password = document.getElementById('password').value;
         const loginBtn = document.getElementById('login-btn');
         const loginError = document.getElementById('login-error');
+        const domain = document.getElementById('domain')?.value?.trim() || '';
+        const mode = currentLoginMode; // 'standalone' or 'domain'
 
         if (!username || !password) {
             loginError.textContent = 'Vui lòng nhập tên đăng nhập và mật khẩu';
+            loginError.classList.remove('hidden');
+            return;
+        }
+
+        if (mode === 'domain' && !domain) {
+            loginError.textContent = 'Vui lòng nhập tên Domain hoặc IP Domain Controller';
             loginError.classList.remove('hidden');
             return;
         }
@@ -94,11 +117,33 @@ const App = {
         loginError.classList.add('hidden');
 
         try {
-            const data = await api.login(username, password);
-            localStorage.setItem('user_data', JSON.stringify(data.user || { username }));
+            const data = await api.login(username, password, mode, domain);
+            const userData = data.user || { username };
+            userData.login_mode = mode;
+            userData.domain = domain;
+            localStorage.setItem('user_data', JSON.stringify(userData));
+            localStorage.setItem('login_mode', mode);
+            if (domain) localStorage.setItem('login_domain', domain);
+
             document.getElementById('current-user').textContent = username;
+
+            // Update sidebar to reflect login mode
+            const userRole = document.querySelector('.user-role');
+            if (userRole) {
+                userRole.textContent = mode === 'domain'
+                    ? `Domain: ${domain}`
+                    : 'Quản trị viên (Local)';
+            }
+
+            // Show/hide AD menu based on mode
+            const adNav = document.querySelector('a[data-page="ad"]');
+            if (adNav) {
+                adNav.style.display = mode === 'domain' ? '' : 'none';
+            }
+
             this.showApp();
-            this.toast('Đăng nhập thành công!', 'success');
+            const modeLabel = mode === 'domain' ? `mạng công ty (${domain})` : 'mạng thường (Local)';
+            this.toast(`Đăng nhập thành công — ${modeLabel}`, 'success');
         } catch (error) {
             loginError.textContent = error.message || 'Tên đăng nhập hoặc mật khẩu không chính xác';
             loginError.classList.remove('hidden');
@@ -111,7 +156,12 @@ const App = {
         await api.logout();
         localStorage.removeItem('user_data');
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('login_mode');
+        localStorage.removeItem('login_domain');
         this.stopAutoRefresh();
+        // Reset AD nav visibility
+        const adNav = document.querySelector('a[data-page="ad"]');
+        if (adNav) adNav.style.display = '';
         this.showLogin();
         this.toast('Đã đăng xuất', 'info');
     },
@@ -1354,6 +1404,32 @@ function togglePasswordVisibility() {
     } else {
         input.type = 'password';
         icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+// ---- Login Mode Switch (Standalone vs Domain) ----
+let currentLoginMode = 'standalone';
+
+function switchLoginMode(mode) {
+    currentLoginMode = mode;
+    const domainField = document.getElementById('domain-field');
+    const modeInfo = document.getElementById('login-mode-info');
+
+    // Toggle tabs
+    document.querySelectorAll('.login-mode-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+    });
+
+    if (mode === 'domain') {
+        domainField.style.display = '';
+        modeInfo.className = 'login-mode-info mode-domain';
+        modeInfo.innerHTML = '<i class="fas fa-building"></i><span>Đăng nhập vào mạng công ty có Domain — sử dụng tài khoản Administrator Local nội bộ để truy cập Active Directory, Remote, quản lý thiết bị</span>';
+        document.getElementById('domain').focus();
+    } else {
+        domainField.style.display = 'none';
+        modeInfo.className = 'login-mode-info';
+        modeInfo.innerHTML = '<i class="fas fa-info-circle"></i><span>Đăng nhập bằng tài khoản Administrator Local — dùng để Scan/Remote trong mạng thường</span>';
+        document.getElementById('username').focus();
     }
 }
 
