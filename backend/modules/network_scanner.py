@@ -250,9 +250,12 @@ class NetworkScanner:
         except ValueError as e:
             return {"success": False, "message": f"Invalid IP range: {e}"}
 
-        # Generate IP list
-        ip_list = [str(ip) for ip in ipaddress.IPv4Network(f"{start}/{end}", strict=False)
-                   if start <= ip <= end]
+        # Generate IP list by iterating from start to end
+        ip_list = []
+        current = start
+        while current <= end:
+            ip_list.append(str(current))
+            current = ipaddress.IPv4Address(int(current) + 1)
 
         # Limit range to prevent abuse
         if len(ip_list) > 1024:

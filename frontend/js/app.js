@@ -1,6 +1,7 @@
 /**
  * IT Dashboard Management - Main Application
  * SPA router, page controllers, charts, interactions
+ * NO DEMO DATA - All data comes from real API
  */
 
 const App = {
@@ -109,6 +110,7 @@ const App = {
     async logout() {
         await api.logout();
         localStorage.removeItem('user_data');
+        localStorage.removeItem('auth_token');
         this.stopAutoRefresh();
         this.showLogin();
         this.toast('Đã đăng xuất', 'info');
@@ -129,27 +131,19 @@ const App = {
     },
 
     navigateTo(page) {
-        // Update hash without triggering hashchange
         if (window.location.hash.slice(1) !== page) {
             window.location.hash = page;
-            return; // hashchange will call handleRoute again
+            return;
         }
 
-        // Hide all pages
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-
-        // Show target page
         const targetPage = document.getElementById(`page-${page}`);
-        if (targetPage) {
-            targetPage.classList.add('active');
-        }
+        if (targetPage) targetPage.classList.add('active');
 
-        // Update sidebar
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === page);
         });
 
-        // Update page title
         const titles = {
             dashboard: 'Dashboard',
             devices: 'Thiết bị',
@@ -196,12 +190,8 @@ const App = {
         const update = () => {
             const now = new Date();
             const timeStr = now.toLocaleString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             document.getElementById('server-time').textContent = timeStr;
         };
@@ -222,23 +212,24 @@ const App = {
                 this.loadRecentActivity()
             ]);
         } catch (e) {
-            // Dashboard loaded with demo data on error
+            // Dashboard shows empty state if API fails
         }
     },
 
     async loadDeviceStats() {
         try {
-            const stats = await api.getDeviceStats();
+            const data = await api.getDeviceStats();
+            // API returns {success: true, stats: {...}} or flat {total, online, offline}
+            const stats = data.stats || data;
             this.animateCounter('stat-total', stats.total || 0);
             this.animateCounter('stat-online', stats.online || 0);
             this.animateCounter('stat-offline', stats.offline || 0);
-            this.animateCounter('stat-types', stats.types || 0);
+            this.animateCounter('stat-types', Object.keys(stats.by_type || {}).length || 0);
         } catch (e) {
-            // Use demo data
-            this.animateCounter('stat-total', 24);
-            this.animateCounter('stat-online', 18);
-            this.animateCounter('stat-offline', 6);
-            this.animateCounter('stat-types', 5);
+            this.animateCounter('stat-total', 0);
+            this.animateCounter('stat-online', 0);
+            this.animateCounter('stat-offline', 0);
+            this.animateCounter('stat-types', 0);
         }
     },
 
@@ -247,13 +238,13 @@ const App = {
         if (!el) return;
         const start = parseInt(el.textContent) || 0;
         const diff = target - start;
+        if (diff === 0) { el.textContent = target; return; }
         const duration = 800;
         const startTime = Date.now();
-
         const update = () => {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+            const eased = 1 - Math.pow(1 - progress, 3);
             el.textContent = Math.round(start + diff * eased);
             if (progress < 1) requestAnimationFrame(update);
         };
@@ -261,18 +252,16 @@ const App = {
     },
 
     async loadCharts() {
-        let online = 18, offline = 6;
-        let typeData = { Workstation: 12, Server: 3, Printer: 2, Switch: 4, Router: 2, 'Access Point': 1 };
-
+        let online = 0, offline = 0, typeData = {};
         try {
-            const stats = await api.getDeviceStats();
-            online = stats.online || online;
-            offline = stats.offline || offline;
-            if (stats.by_type) typeData = stats.by_type;
+            const data = await api.getDeviceStats();
+            const stats = data.stats || data;
+            online = stats.online || 0;
+            offline = stats.offline || 0;
+            typeData = stats.by_type || {};
         } catch (e) {
-            // Use demo data
+            // Empty charts
         }
-
         this.renderStatusChart(online, offline);
         this.renderTypeChart(typeData);
     },
@@ -280,7 +269,6 @@ const App = {
     renderStatusChart(online, offline) {
         const ctx = document.getElementById('statusChart');
         if (!ctx) return;
-
         if (this.charts.status) this.charts.status.destroy();
 
         this.charts.status = new Chart(ctx, {
@@ -289,14 +277,8 @@ const App = {
                 labels: ['Online', 'Offline'],
                 datasets: [{
                     data: [online, offline],
-                    backgroundColor: [
-                        'rgba(0, 255, 136, 0.8)',
-                        'rgba(248, 81, 73, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgba(0, 255, 136, 1)',
-                        'rgba(248, 81, 73, 1)'
-                    ],
+                    backgroundColor: ['rgba(0, 255, 136, 0.8)', 'rgba(248, 81, 73, 0.8)'],
+                    borderColor: ['rgba(0, 255, 136, 1)', 'rgba(248, 81, 73, 1)'],
                     borderWidth: 2,
                     hoverOffset: 8
                 }]
@@ -308,11 +290,7 @@ const App = {
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: {
-                            color: '#8b949e',
-                            padding: 20,
-                            font: { size: 13 }
-                        }
+                        labels: { color: '#8b949e', padding: 20, font: { size: 13 } }
                     }
                 }
             }
@@ -322,29 +300,25 @@ const App = {
     renderTypeChart(typeData) {
         const ctx = document.getElementById('typeChart');
         if (!ctx) return;
-
         if (this.charts.types) this.charts.types.destroy();
 
         const labels = Object.keys(typeData);
         const values = Object.values(typeData);
         const colors = [
-            'rgba(59, 130, 246, 0.8)',
-            'rgba(168, 85, 247, 0.8)',
-            'rgba(57, 210, 192, 0.8)',
-            'rgba(210, 153, 34, 0.8)',
-            'rgba(219, 109, 40, 0.8)',
-            'rgba(233, 69, 96, 0.8)'
+            'rgba(59, 130, 246, 0.8)', 'rgba(168, 85, 247, 0.8)',
+            'rgba(57, 210, 192, 0.8)', 'rgba(210, 153, 34, 0.8)',
+            'rgba(219, 109, 40, 0.8)', 'rgba(233, 69, 96, 0.8)'
         ];
 
         this.charts.types = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels,
+                labels: labels.length ? labels : ['Chưa có dữ liệu'],
                 datasets: [{
                     label: 'Số lượng',
-                    data: values,
-                    backgroundColor: colors.slice(0, labels.length),
-                    borderColor: colors.map(c => c.replace('0.8', '1')).slice(0, labels.length),
+                    data: values.length ? values : [0],
+                    backgroundColor: colors.slice(0, labels.length || 1),
+                    borderColor: colors.map(c => c.replace('0.8', '1')).slice(0, labels.length || 1),
                     borderWidth: 1,
                     borderRadius: 6,
                     barThickness: 40
@@ -353,9 +327,7 @@ const App = {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
+                plugins: { legend: { display: false } },
                 scales: {
                     x: {
                         grid: { color: 'rgba(255,255,255,0.05)' },
@@ -363,11 +335,7 @@ const App = {
                     },
                     y: {
                         grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: {
-                            color: '#8b949e',
-                            font: { size: 12 },
-                            stepSize: 1
-                        },
+                        ticks: { color: '#8b949e', font: { size: 12 }, stepSize: 1 },
                         beginAtZero: true
                     }
                 }
@@ -390,33 +358,11 @@ const App = {
                     </tr>
                 `).join('');
             } else {
-                tbody.innerHTML = this.getDemoActivityHTML();
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-inbox"></i><p>Chưa có hoạt động nào. Bắt đầu quét mạng để xem thiết bị.</p></td></tr>';
             }
         } catch (e) {
-            tbody.innerHTML = this.getDemoActivityHTML();
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-inbox"></i><p>Không thể tải dữ liệu hoạt động</p></td></tr>';
         }
-    },
-
-    getDemoActivityHTML() {
-        const demoData = [
-            { time: '2026-06-20 08:30:15', ip: '192.168.1.10', hostname: 'PC-NV01', action: 'Đăng nhập Windows', user: 'nguyenvan', status: 'success' },
-            { time: '2026-06-20 08:25:00', ip: '192.168.1.25', hostname: 'SRV-DB01', action: 'Khởi động lại dịch vụ', user: 'admin', status: 'info' },
-            { time: '2026-06-20 08:20:44', ip: '192.168.1.50', hostname: 'PRINTER-01', action: 'Cập nhật firmware', user: 'admin', status: 'success' },
-            { time: '2026-06-20 08:15:00', ip: '192.168.1.100', hostname: 'SW-FLOOR2', action: 'Port 12 mất kết nối', user: 'System', status: 'error' },
-            { time: '2026-06-20 08:10:22', ip: '192.168.1.15', hostname: 'PC-KT02', action: 'Cài đặt phần mềm Office', user: 'admin', status: 'success' },
-            { time: '2026-06-20 08:05:10', ip: '192.168.1.30', hostname: 'SRV-WEB01', action: 'Backup hoàn tất', user: 'System', status: 'success' },
-            { time: '2026-06-20 08:00:00', ip: '192.168.1.105', hostname: 'ROUTER-MAIN', action: 'Khởi động lại router', user: 'admin', status: 'warning' },
-        ];
-
-        return demoData.map(a => `
-            <tr>
-                <td><span style="color:var(--text-muted);font-family:var(--font-mono);font-size:12px">${a.time}</span></td>
-                <td><strong>${a.ip}</strong> (${a.hostname})</td>
-                <td>${a.action}</td>
-                <td>${a.user}</td>
-                <td>${this.getStatusBadge(a.status)}</td>
-            </tr>
-        `).join('');
     },
 
     getStatusBadge(status) {
@@ -440,78 +386,66 @@ const App = {
 
     async loadDevices() {
         try {
-            const devices = await api.getDevices();
-            this.devices = Array.isArray(devices) ? devices : (devices.devices || []);
+            const data = await api.getDevices();
+            // API may return {devices: [...]} or [...]
+            this.devices = Array.isArray(data) ? data : (data.devices || data.stats?.devices || []);
         } catch (e) {
-            // Use demo data
-            this.devices = this.getDemoDevices();
+            this.devices = [];
         }
         this.renderDeviceTable(this.devices);
         this.startAutoRefresh();
     },
 
-    getDemoDevices() {
-        return [
-            { ip: '192.168.1.1', hostname: 'ROUTER-MAIN', mac: 'AA:BB:CC:DD:EE:01', status: 'online', type: 'router', user_login: 'admin', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.10', hostname: 'PC-NV01', mac: 'AA:BB:CC:DD:EE:10', status: 'online', type: 'workstation', user_login: 'nguyenvan', last_seen: '2026-06-20 08:29:00' },
-            { ip: '192.168.1.11', hostname: 'PC-NV02', mac: 'AA:BB:CC:DD:EE:11', status: 'online', type: 'workstation', user_login: 'tranthi', last_seen: '2026-06-20 08:28:00' },
-            { ip: '192.168.1.12', hostname: 'PC-KT01', mac: 'AA:BB:CC:DD:EE:12', status: 'offline', type: 'workstation', user_login: '', last_seen: '2026-06-19 18:00:00' },
-            { ip: '192.168.1.15', hostname: 'PC-KT02', mac: 'AA:BB:CC:DD:EE:15', status: 'online', type: 'workstation', user_login: 'leminh', last_seen: '2026-06-20 08:25:00' },
-            { ip: '192.168.1.20', hostname: 'PC-GD01', mac: 'AA:BB:CC:DD:EE:20', status: 'online', type: 'workstation', user_login: 'phamquoc', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.25', hostname: 'SRV-DB01', mac: 'AA:BB:CC:DD:EE:25', status: 'online', type: 'server', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.26', hostname: 'SRV-WEB01', mac: 'AA:BB:CC:DD:EE:26', status: 'online', type: 'server', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.27', hostname: 'SRV-APP01', mac: 'AA:BB:CC:DD:EE:27', status: 'offline', type: 'server', user_login: '', last_seen: '2026-06-19 23:00:00' },
-            { ip: '192.168.1.30', hostname: 'SRV-FILE01', mac: 'AA:BB:CC:DD:EE:30', status: 'online', type: 'server', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.50', hostname: 'PRINTER-01', mac: 'AA:BB:CC:DD:EE:50', status: 'online', type: 'printer', user_login: '', last_seen: '2026-06-20 08:20:00' },
-            { ip: '192.168.1.51', hostname: 'PRINTER-02', mac: 'AA:BB:CC:DD:EE:51', status: 'offline', type: 'printer', user_login: '', last_seen: '2026-06-18 15:00:00' },
-            { ip: '192.168.1.100', hostname: 'SW-FLOOR1', mac: 'AA:BB:CC:DD:EE:A0', status: 'online', type: 'switch', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.101', hostname: 'SW-FLOOR2', mac: 'AA:BB:CC:DD:EE:A1', status: 'online', type: 'switch', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.102', hostname: 'SW-FLOOR3', mac: 'AA:BB:CC:DD:EE:A2', status: 'offline', type: 'switch', user_login: '', last_seen: '2026-06-17 09:00:00' },
-            { ip: '192.168.1.105', hostname: 'AP-LOBBY', mac: 'AA:BB:CC:DD:EE:A5', status: 'online', type: 'access_point', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.106', hostname: 'AP-CAFETERIA', mac: 'AA:BB:CC:DD:EE:A6', status: 'online', type: 'access_point', user_login: '', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.110', hostname: 'AP-FLOOR3', mac: 'AA:BB:CC:DD:EE:B0', status: 'offline', type: 'access_point', user_login: '', last_seen: '2026-06-20 02:00:00' },
-            { ip: '192.168.1.200', hostname: 'PC-KS01', mac: 'AA:BB:CC:DD:EE:C0', status: 'online', type: 'workstation', user_login: '', last_seen: '2026-06-20 08:15:00' },
-            { ip: '192.168.1.201', hostname: 'PC-KS02', mac: 'AA:BB:CC:DD:EE:C1', status: 'offline', type: 'workstation', user_login: '', last_seen: '2026-06-19 17:30:00' },
-            { ip: '192.168.1.210', hostname: 'PC-DT01', mac: 'AA:BB:CC:DD:EE:D0', status: 'online', type: 'workstation', user_login: 'hoangduc', last_seen: '2026-06-20 08:28:00' },
-            { ip: '192.168.1.211', hostname: 'PC-DT02', mac: 'AA:BB:CC:DD:EE:D1', status: 'online', type: 'workstation', user_login: '', last_seen: '2026-06-20 08:29:00' },
-            { ip: '192.168.1.220', hostname: 'PC-IT01', mac: 'AA:BB:CC:DD:EE:E0', status: 'online', type: 'workstation', user_login: 'admin', last_seen: '2026-06-20 08:30:00' },
-            { ip: '192.168.1.221', hostname: 'PC-IT02', mac: 'AA:BB:CC:DD:EE:E1', status: 'offline', type: 'workstation', user_login: '', last_seen: '2026-06-16 10:00:00' },
-        ];
-    },
-
     renderDeviceTable(devices) {
         const tbody = document.getElementById('devices-table-body');
         if (!devices || devices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-inbox"></i><p>Không tìm thấy thiết bị nào</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-inbox"></i><p>Chưa có thiết bị nào. Hãy quét mạng để bắt đầu.</p></td></tr>';
+            document.getElementById('device-count').textContent = '0 thiết bị';
             return;
         }
 
-        tbody.innerHTML = devices.map(d => `
+        tbody.innerHTML = devices.map(d => {
+            const isOnline = d.reachable || d.status === 'online';
+            const status = isOnline ? 'online' : 'offline';
+            const mac = d.mac_address || d.mac || 'N/A';
+            const hostname = d.hostname || d.ip;
+            const type = d.type || 'unknown';
+            const user = d.user_login || d.logged_user || '';
+            const lastSeen = d.last_seen || d.scan_timestamp || '';
+
+            return `
             <tr onclick="App.openDeviceDetail('${d.ip}')" class="device-row" data-ip="${d.ip}">
                 <td><code style="color:var(--cyan)">${d.ip}</code></td>
-                <td><strong>${d.hostname || 'Unknown'}</strong></td>
-                <td><code style="font-size:11px;color:var(--text-muted)">${d.mac || 'N/A'}</code></td>
-                <td>${d.status === 'online'
+                <td><strong>${this.escapeHtml(hostname)}</strong></td>
+                <td><code style="font-size:11px;color:var(--text-muted)">${this.escapeHtml(mac)}</code></td>
+                <td>${status === 'online'
                     ? '<span class="status-dot online"></span>Online'
                     : '<span class="status-dot offline"></span>Offline'
                 }</td>
-                <td><span class="badge badge-${d.type || 'other'}">${this.getDeviceTypeLabel(d.type)}</span></td>
-                <td>${d.user_login || '<span style="color:var(--text-muted)">-</span>'}</td>
-                <td><span style="font-size:12px;color:var(--text-muted)">${this.formatTime(d.last_seen)}</span></td>
-            </tr>
-        `).join('');
+                <td><span class="badge badge-${type}">${this.getDeviceTypeLabel(type)}</span></td>
+                <td>${user ? this.escapeHtml(user) : '<span style="color:var(--text-muted)">-</span>'}</td>
+                <td><span style="font-size:12px;color:var(--text-muted)">${this.formatTime(lastSeen)}</span></td>
+            </tr>`;
+        }).join('');
 
         document.getElementById('device-count').textContent = `${devices.length} thiết bị`;
     },
 
     getDeviceTypeLabel(type) {
         const map = {
-            workstation: 'Workstation',
-            server: 'Server',
-            printer: 'Printer',
-            switch: 'Switch',
-            router: 'Router',
-            access_point: 'Access Point'
+            'windows-pc': 'Workstation',
+            'workstation': 'Workstation',
+            'windows-server': 'Server',
+            'linux-server': 'Linux Server',
+            'web-server': 'Web Server',
+            'server': 'Server',
+            'printer': 'Printer',
+            'switch': 'Switch',
+            'router': 'Router',
+            'access_point': 'Access Point',
+            'ftp-server': 'FTP Server',
+            'vnc-host': 'VNC Host',
+            'device': 'Thiết bị'
         };
         return map[type] || type || 'Khác';
     },
@@ -527,13 +461,17 @@ const App = {
             filtered = filtered.filter(d =>
                 (d.ip && d.ip.includes(search)) ||
                 (d.hostname && d.hostname.toLowerCase().includes(search)) ||
+                (d.mac_address && d.mac_address.toLowerCase().includes(search)) ||
                 (d.mac && d.mac.toLowerCase().includes(search)) ||
                 (d.user_login && d.user_login.toLowerCase().includes(search))
             );
         }
 
         if (statusFilter) {
-            filtered = filtered.filter(d => d.status === statusFilter);
+            filtered = filtered.filter(d => {
+                const isOnline = d.reachable || d.status === 'online';
+                return statusFilter === 'online' ? isOnline : !isOnline;
+            });
         }
 
         if (typeFilter) {
@@ -599,11 +537,11 @@ const App = {
 
     async refreshDevicesQuiet() {
         try {
-            const devices = await api.getDevices();
-            this.devices = Array.isArray(devices) ? devices : (devices.devices || []);
+            const data = await api.getDevices();
+            this.devices = Array.isArray(data) ? data : (data.devices || []);
             this.filterDevices();
         } catch (e) {
-            // Silent fail for auto-refresh
+            // Silent fail
         }
     },
 
@@ -617,30 +555,30 @@ const App = {
         modal.classList.remove('hidden');
 
         document.getElementById('modal-device-title').innerHTML = `<i class="fas fa-server"></i> Chi tiết thiết bị - ${ip}`;
-
-        // Switch to info tab
         this.switchDeviceTab('info');
 
-        // Load device info
         const infoGrid = document.getElementById('device-info-grid');
         infoGrid.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;color:var(--text-muted)">Đang tải thông tin...</p>';
 
         try {
             const device = await api.getDeviceDetails(ip);
             this.renderDeviceInfo(device);
-            this.renderDevicePorts(device.ports || []);
+            this.renderDevicePorts(device.detailed_ports || device.open_ports || device.ports || []);
             this.renderDeviceSoftware(device.software || []);
         } catch (e) {
-            // Demo data
-            const demo = this.devices.find(d => d.ip === ip) || { ip, hostname: 'Unknown', mac: 'N/A', status: 'unknown', type: 'unknown' };
-            this.renderDeviceInfo(demo);
-            this.renderDevicePorts(this.getDemoPorts());
-            this.renderDeviceSoftware(this.getDemoSoftware());
+            // Try to render from cached device data
+            const cached = this.devices.find(d => d.ip === ip) || { ip };
+            this.renderDeviceInfo(cached);
+            this.renderDevicePorts(cached.open_ports || []);
+            this.renderDeviceSoftware([]);
         }
     },
 
     renderDeviceInfo(device) {
         const grid = document.getElementById('device-info-grid');
+        const isOnline = device.reachable || device.status === 'online';
+        const mac = device.mac_address || device.mac || 'N/A';
+
         grid.innerHTML = `
             <div class="detail-item">
                 <label>Địa chỉ IP</label>
@@ -648,71 +586,38 @@ const App = {
             </div>
             <div class="detail-item">
                 <label>Hostname</label>
-                <span>${device.hostname || 'N/A'}</span>
+                <span>${this.escapeHtml(device.hostname || 'N/A')}</span>
             </div>
             <div class="detail-item">
                 <label>Địa chỉ MAC</label>
-                <span>${device.mac || 'N/A'}</span>
+                <span>${this.escapeHtml(mac)}</span>
             </div>
             <div class="detail-item">
                 <label>Trạng thái</label>
-                <span>${device.status === 'online' ? '<span class="status-dot online"></span>Online' : '<span class="status-dot offline"></span>Offline'}</span>
+                <span>${isOnline ? '<span class="status-dot online"></span>Online' : '<span class="status-dot offline"></span>Offline'}</span>
             </div>
             <div class="detail-item">
                 <label>Loại thiết bị</label>
-                <span><span class="badge badge-${device.type}">${this.getDeviceTypeLabel(device.type)}</span></span>
+                <span><span class="badge badge-${device.type || 'unknown'}">${this.getDeviceTypeLabel(device.type)}</span></span>
+            </div>
+            <div class="detail-item">
+                <label>Thời gian phản hồi</label>
+                <span>${device.response_time_ms ? device.response_time_ms + 'ms' : 'N/A'}</span>
             </div>
             <div class="detail-item">
                 <label>Đăng nhập cuối</label>
-                <span>${device.user_login || 'Không có'}</span>
+                <span>${device.user_login || device.logged_user || 'Không có'}</span>
             </div>
             <div class="detail-item">
                 <label>Lần cuối online</label>
-                <span>${device.last_seen || 'N/A'}</span>
+                <span>${this.formatTime(device.last_seen || device.scan_timestamp)}</span>
             </div>
-            <div class="detail-item">
-                <label>Hệ điều hành</label>
-                <span>${device.os || 'Windows 10/11'}</span>
-            </div>
-            <div class="detail-item">
-                <label>CPU</label>
-                <span>${device.cpu || 'Intel Core i5-12400'}</span>
-            </div>
-            <div class="detail-item">
-                <label>RAM</label>
-                <span>${device.ram || '16 GB'}</span>
-            </div>
-            <div class="detail-item">
-                <label>Ổ cứng</label>
-                <span>${device.disk || '512 GB SSD'}</span>
-            </div>
-            <div class="detail-item">
-                <label>Firewall</label>
-                <span>${device.firewall_status !== undefined ? (device.firewall_status ? '<span style="color:var(--green-light)">Bật</span>' : '<span style="color:var(--red-light)">Tắt</span>') : '<span style="color:var(--green-light)">Bật</span>'}</span>
-            </div>
+            ${device.os ? `<div class="detail-item"><label>Hệ điều hành</label><span>${this.escapeHtml(device.os)}</span></div>` : ''}
+            ${device.cpu ? `<div class="detail-item"><label>CPU</label><span>${this.escapeHtml(device.cpu)}</span></div>` : ''}
+            ${device.ram ? `<div class="detail-item"><label>RAM</label><span>${this.escapeHtml(device.ram)}</span></div>` : ''}
+            ${device.disk ? `<div class="detail-item"><label>Ổ cứng</label><span>${this.escapeHtml(device.disk)}</span></div>` : ''}
+            ${device.firewall_status !== undefined ? `<div class="detail-item"><label>Firewall</label><span>${device.firewall_status ? '<span style="color:var(--green-light)">Bật</span>' : '<span style="color:var(--red-light)">Tắt</span>'}</span></div>` : ''}
         `;
-    },
-
-    getDemoPorts() {
-        return [
-            { port: 80, protocol: 'TCP', status: 'open', service: 'HTTP' },
-            { port: 443, protocol: 'TCP', status: 'open', service: 'HTTPS' },
-            { port: 445, protocol: 'TCP', status: 'open', service: 'SMB' },
-            { port: 3389, protocol: 'TCP', status: 'open', service: 'RDP' },
-            { port: 5985, protocol: 'TCP', status: 'filtered', service: 'WinRM' },
-            { port: 22, protocol: 'TCP', status: 'closed', service: 'SSH' },
-        ];
-    },
-
-    getDemoSoftware() {
-        return [
-            { name: 'Microsoft Office 365', version: '16.0.17726', publisher: 'Microsoft', installed: '2026-01-15' },
-            { name: 'Google Chrome', version: '126.0.6478', publisher: 'Google', installed: '2026-06-18' },
-            { name: 'Mozilla Firefox', version: '128.0', publisher: 'Mozilla', installed: '2026-05-20' },
-            { name: 'Visual Studio Code', version: '1.92.0', publisher: 'Microsoft', installed: '2026-06-10' },
-            { name: '7-Zip', version: '24.08', publisher: 'Igor Pavlov', installed: '2026-03-01' },
-            { name: 'Adobe Acrobat Reader', version: '24.002', publisher: 'Adobe', installed: '2026-02-28' },
-        ];
     },
 
     renderDevicePorts(ports) {
@@ -721,35 +626,37 @@ const App = {
             tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Không có port nào được mở</p></td></tr>';
             return;
         }
-        tbody.innerHTML = ports.map(p => `
+        tbody.innerHTML = ports.map(p => {
+            const state = p.state || p.status || 'unknown';
+            return `
             <tr>
                 <td><code style="color:var(--cyan)">${p.port}</code></td>
-                <td>${p.protocol}</td>
-                <td>${p.status === 'open'
+                <td>${p.protocol || 'TCP'}</td>
+                <td>${state === 'open'
                     ? '<span class="status-dot online"></span>Mở'
-                    : p.status === 'filtered'
+                    : state === 'filtered'
                         ? '<span class="status-dot" style="background:var(--yellow-light)"></span>Lọc'
                         : '<span class="status-dot offline"></span>Đóng'
                 }</td>
                 <td>${p.service || 'N/A'}</td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     },
 
     renderDeviceSoftware(software) {
         const tbody = document.getElementById('device-software-body');
         if (!software || software.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không tìm thấy phần mềm</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không tìm thấy phần mềm (cần kết nối WMI)</p></td></tr>';
             return;
         }
         tbody.innerHTML = software.map(s => `
             <tr>
-                <td><strong>${s.name}</strong></td>
-                <td>${s.version}</td>
-                <td>${s.publisher || 'N/A'}</td>
+                <td><strong>${this.escapeHtml(s.name)}</strong></td>
+                <td>${this.escapeHtml(s.version || 'N/A')}</td>
+                <td>${this.escapeHtml(s.publisher || 'N/A')}</td>
                 <td>${s.installed || 'N/A'}</td>
                 <td>
-                    <button class="btn-danger" style="padding:4px 10px;font-size:11px" onclick="App.confirmUninstall('${s.name}')">
+                    <button class="btn-danger" style="padding:4px 10px;font-size:11px" onclick="App.confirmUninstall('${this.escapeHtml(s.name)}')">
                         <i class="fas fa-trash-can"></i> Gỡ
                     </button>
                 </td>
@@ -765,7 +672,6 @@ const App = {
     switchDeviceTab(tab) {
         document.querySelectorAll('.device-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.device-tab-content').forEach(c => c.classList.remove('active'));
-
         document.querySelector(`.device-tab[data-tab="${tab}"]`).classList.add('active');
         document.getElementById(`device-tab-${tab}`).classList.add('active');
     },
@@ -781,35 +687,24 @@ const App = {
         }
 
         switch (action) {
-            case 'remote-desktop':
-                this.executeRemoteDesktop(this.currentDeviceIP);
-                break;
-            case 'command':
-                this.closeDeviceModal();
-                window.location.hash = 'remote';
-                break;
-            case 'install-software':
-                this.showInstallSoftwareDialog();
-                break;
-            case 'uninstall-software':
-                this.showUninstallSoftwareDialog();
-                break;
-            case 'copy-file':
-                this.showCopyFileDialog();
-                break;
-            case 'firewall':
-                this.confirmToggleFirewall();
-                break;
-            case 'windows-update':
-                this.confirmWindowsUpdate();
-                break;
+            case 'remote-desktop': this.executeRemoteDesktop(this.currentDeviceIP); break;
+            case 'command': this.closeDeviceModal(); window.location.hash = 'remote'; break;
+            case 'install-software': this.showInstallSoftwareDialog(); break;
+            case 'uninstall-software': this.showUninstallSoftwareDialog(); break;
+            case 'copy-file': this.showCopyFileDialog(); break;
+            case 'firewall': this.confirmToggleFirewall(); break;
+            case 'windows-update': this.confirmWindowsUpdate(); break;
         }
     },
 
     async executeRemoteDesktop(ip) {
         try {
-            await api.openRemoteDesktop(ip);
-            this.toast(`Đang kết nối Remote Desktop đến ${ip}`, 'info');
+            const result = await api.openRemoteDesktop(ip);
+            if (result && result.command) {
+                this.toast(`Đang mở Remote Desktop đến ${ip}...`, 'info');
+            } else {
+                this.toast(`Đang kết nối RDP đến ${ip}`, 'info');
+            }
         } catch (e) {
             this.toast(`Kết nối RDP đến ${ip}: ${e.message}`, 'error');
         }
@@ -919,71 +814,45 @@ const App = {
     async startScan() {
         const startIp = document.getElementById('scan-start-ip').value.trim();
         const endIp = document.getElementById('scan-end-ip').value.trim();
-        const method = document.getElementById('scan-method').value;
 
         if (!startIp || !endIp) {
             this.toast('Vui lòng nhập địa chỉ IP bắt đầu và kết thúc', 'warning');
             return;
         }
 
-        // Show progress section
+        // Show progress
         document.getElementById('scan-progress-section').classList.remove('hidden');
         document.getElementById('scan-results-card').classList.add('hidden');
         document.getElementById('btn-start-scan').classList.add('hidden');
         document.getElementById('btn-stop-scan').classList.remove('hidden');
 
-        // Reset progress
-        this.updateScanProgress(0, 0, 0, 'Đang khởi tạo...');
+        const totalIPs = this.estimateIPCount(startIp, endIp);
+        this.updateScanProgress(0, 0, 0, 'Đang khởi tạo quét mạng...');
 
         try {
-            const data = await api.scanNetwork(startIp, endIp, method);
-            this.scanId = data.scan_id || data.id;
+            const startTime = Date.now();
+            const result = await api.scanNetwork(startIp, endIp);
 
-            // Simulate progress (for demo when no real scan is running)
-            this.simulateScanProgress(startIp, endIp);
+            // Update progress to 100%
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            const devices = result.devices || [];
+            this.updateScanProgress(100, result.total_scanned || totalIPs, devices.length, 'Hoàn tất!');
+            document.getElementById('scan-elapsed').textContent = `${elapsed}s`;
 
-            // Try polling for real progress
-            this.scanInterval = setInterval(async () => {
-                try {
-                    const status = await api.getScanStatus(this.scanId);
-                    if (status.progress !== undefined) {
-                        this.updateScanProgress(status.progress, status.scanned || 0, status.found || 0, status.message || 'Đang quét...');
-                        if (status.completed) {
-                            this.completeScan();
-                        }
-                    }
-                } catch (e) {
-                    // Demo mode - simulate
-                }
-            }, 2000);
+            // Save scanned devices
+            this.devices = devices;
+
+            // Show results
+            this.showScanResults(devices);
+            this.toast(`Quét hoàn tất! Tìm thấy ${devices.length} thiết bị`, 'success');
 
         } catch (e) {
-            // Demo mode - simulate
-            this.simulateScanProgress(startIp, endIp);
+            this.updateScanProgress(100, 0, 0, 'Lỗi: ' + e.message);
+            this.toast('Lỗi quét mạng: ' + e.message, 'error');
+        } finally {
+            document.getElementById('btn-start-scan').classList.remove('hidden');
+            document.getElementById('btn-stop-scan').classList.add('hidden');
         }
-    },
-
-    simulateScanProgress(startIp, endIp) {
-        let progress = 0;
-        const total = this.estimateIPCount(startIp, endIp);
-        const startTime = Date.now();
-
-        this.scanInterval = setInterval(() => {
-            progress += Math.random() * 8 + 2;
-            if (progress >= 100) {
-                progress = 100;
-                this.updateScanProgress(100, total, Math.floor(Math.random() * 15) + 5, 'Hoàn tất!');
-                this.completeScan();
-                return;
-            }
-
-            const scanned = Math.floor(total * progress / 100);
-            const found = Math.floor(Math.random() * 15) + Math.floor(scanned * 0.1);
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-            this.updateScanProgress(progress, scanned, found, 'Đang quét...');
-            document.getElementById('scan-elapsed').textContent = `${elapsed}s`;
-        }, 500);
     },
 
     estimateIPCount(start, end) {
@@ -1002,75 +871,32 @@ const App = {
         document.getElementById('scan-status-text').textContent = message;
     },
 
-    completeScan() {
-        if (this.scanInterval) {
-            clearInterval(this.scanInterval);
-            this.scanInterval = null;
-        }
-
-        document.getElementById('btn-start-scan').classList.remove('hidden');
-        document.getElementById('btn-stop-scan').classList.add('hidden');
-        document.getElementById('scan-status-text').textContent = 'Hoàn tất!';
-
-        this.showScanResults();
-        this.toast('Quét mạng hoàn tất!', 'success');
-    },
-
-    showScanResults() {
+    showScanResults(devices) {
         const card = document.getElementById('scan-results-card');
         card.classList.remove('hidden');
         const tbody = document.getElementById('scan-results-body');
 
-        // Generate demo scan results
-        const baseIp = document.getElementById('scan-start-ip').value || '192.168.1.';
-        const results = this.generateDemoScanResults(baseIp);
+        if (!devices || devices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-search"></i><p>Không tìm thấy thiết bị nào trong dải IP đã quét</p></td></tr>';
+            return;
+        }
 
-        tbody.innerHTML = results.map((r, i) => `
+        tbody.innerHTML = devices.map((d, i) => {
+            const isOnline = d.reachable || d.status === 'online';
+            const mac = d.mac_address || d.mac || 'N/A';
+            return `
             <tr>
                 <td><input type="checkbox" class="scan-result-checkbox" data-index="${i}" checked></td>
-                <td><code style="color:var(--cyan)">${r.ip}</code></td>
-                <td>${r.hostname}</td>
-                <td><code style="font-size:11px;color:var(--text-muted)">${r.mac}</code></td>
-                <td><span class="status-dot online"></span>Online</td>
-                <td><span class="badge badge-${r.type}">${this.getDeviceTypeLabel(r.type)}</span></td>
-            </tr>
-        `).join('');
-    },
-
-    generateDemoScanResults(baseIp) {
-        const prefix = baseIp.substring(0, baseIp.lastIndexOf('.') + 1);
-        const results = [];
-        const types = ['workstation', 'server', 'printer', 'switch', 'router', 'access_point'];
-        const count = Math.floor(Math.random() * 10) + 5;
-
-        for (let i = 0; i < count; i++) {
-            const lastOctet = Math.floor(Math.random() * 254) + 1;
-            results.push({
-                ip: `${prefix}${lastOctet}`,
-                hostname: `DEVICE-${String(lastOctet).padStart(3, '0')}`,
-                mac: this.generateRandomMAC(),
-                type: types[Math.floor(Math.random() * types.length)]
-            });
-        }
-        return results.sort((a, b) => {
-            const aNum = parseInt(a.ip.split('.').pop());
-            const bNum = parseInt(b.ip.split('.').pop());
-            return aNum - bNum;
-        });
-    },
-
-    generateRandomMAC() {
-        return Array.from({ length: 6 }, () =>
-            Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase()
-        ).join(':');
+                <td><code style="color:var(--cyan)">${d.ip}</code></td>
+                <td>${this.escapeHtml(d.hostname || d.ip)}</td>
+                <td><code style="font-size:11px;color:var(--text-muted)">${this.escapeHtml(mac)}</code></td>
+                <td>${isOnline ? '<span class="status-dot online"></span>Online' : '<span class="status-dot offline"></span>Offline'}</td>
+                <td><span class="badge badge-${d.type || 'unknown'}">${this.getDeviceTypeLabel(d.type)}</span></td>
+            </tr>`;
+        }).join('');
     },
 
     stopScan() {
-        if (this.scanInterval) {
-            clearInterval(this.scanInterval);
-            this.scanInterval = null;
-        }
-
         document.getElementById('btn-start-scan').classList.remove('hidden');
         document.getElementById('btn-stop-scan').classList.add('hidden');
         document.getElementById('scan-status-text').textContent = 'Đã dừng';
@@ -1105,8 +931,7 @@ const App = {
                 devices = Array.isArray(data) ? data : (data.devices || []);
                 this.devices = devices;
             } catch (e) {
-                devices = this.getDemoDevices();
-                this.devices = devices;
+                devices = [];
             }
         }
 
@@ -1115,24 +940,26 @@ const App = {
 
     renderRemoteDeviceList(devices) {
         const list = document.getElementById('remote-device-list');
-        const onlineDevices = devices.filter(d => d.status === 'online');
-        const offlineDevices = devices.filter(d => d.status === 'offline');
+        const onlineDevices = devices.filter(d => d.reachable || d.status === 'online');
+        const offlineDevices = devices.filter(d => !(d.reachable || d.status === 'online'));
         const sorted = [...onlineDevices, ...offlineDevices];
 
         if (sorted.length === 0) {
-            list.innerHTML = '<div class="empty-state"><p>Không tìm thấy thiết bị</p></div>';
+            list.innerHTML = '<div class="empty-state"><p>Không tìm thấy thiết bị nào. Hãy quét mạng trước.</p></div>';
             return;
         }
 
-        list.innerHTML = sorted.map(d => `
+        list.innerHTML = sorted.map(d => {
+            const isOnline = d.reachable || d.status === 'online';
+            return `
             <div class="remote-device-item" data-ip="${d.ip}" onclick="App.selectRemoteDevice('${d.ip}', this)">
-                <span class="status-dot ${d.status}"></span>
+                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
                 <div>
-                    <div class="device-name">${d.hostname || 'Unknown'}</div>
+                    <div class="device-name">${this.escapeHtml(d.hostname || d.ip)}</div>
                     <div class="device-ip">${d.ip}</div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     },
 
     filterRemoteDevices() {
@@ -1150,7 +977,6 @@ const App = {
         document.getElementById('remote-device-name').textContent = ip;
         this.currentDeviceIP = ip;
 
-        // Clear terminal welcome and show selection
         const output = document.getElementById('terminal-output');
         output.innerHTML = `<div class="terminal-line"><span class="info">[*] Đã chọn thiết bị: ${ip}</span></div>`;
     },
@@ -1166,11 +992,8 @@ const App = {
         }
 
         const output = document.getElementById('terminal-output');
-
-        // Show command
         output.innerHTML += `<div class="terminal-line"><span class="cmd">${this.currentDeviceIP}$&gt; ${this.escapeHtml(command)}</span></div>`;
 
-        // Show loading
         const loadingId = 'exec-' + Date.now();
         output.innerHTML += `<div class="terminal-line" id="${loadingId}"><span class="info">[*] Đang thực thi...</span></div>`;
         output.scrollTop = output.scrollHeight;
@@ -1180,66 +1003,23 @@ const App = {
         try {
             const result = await api.executeRemoteCommand(this.currentDeviceIP, command);
             const loadingEl = document.getElementById(loadingId);
-
             if (result.output) {
                 loadingEl.innerHTML = `<span class="output">${this.escapeHtml(result.output)}</span>`;
+            } else if (result.error) {
+                loadingEl.innerHTML = `<span class="error">[ERROR] ${this.escapeHtml(result.error)}</span>`;
             } else {
                 loadingEl.innerHTML = `<span class="output">${this.escapeHtml(JSON.stringify(result, null, 2))}</span>`;
             }
         } catch (e) {
             const loadingEl = document.getElementById(loadingId);
-            // Demo response
-            loadingEl.innerHTML = `<span class="output">${this.getDemoCommandOutput(command)}</span>`;
+            loadingEl.innerHTML = `<span class="error">[ERROR] ${this.escapeHtml(e.message)}</span>`;
         }
 
         output.scrollTop = output.scrollHeight;
     },
 
-    getDemoCommandOutput(command) {
-        const cmd = command.toLowerCase().trim();
-        if (cmd === 'ipconfig' || cmd.includes('ipconfig')) {
-            return `Windows IP Configuration
-
-Ethernet adapter Ethernet:
-   Connection-specific DNS Suffix  . : local
-   IPv4 Address. . . . . . . . . . . : 192.168.1.10
-   Subnet Mask . . . . . . . . . . . : 255.255.255.0
-   Default Gateway . . . . . . . . . : 192.168.1.1`;
-        }
-        if (cmd === 'whoami') {
-            return `DOMAIN\\${document.getElementById('current-user')?.textContent || 'admin'}`;
-        }
-        if (cmd === 'hostname') {
-            return this.currentDeviceIP ? `DEVICE-${this.currentDeviceIP.split('.').pop()}` : 'UNKNOWN';
-        }
-        if (cmd === 'dir' || cmd === 'ls') {
-            return ` Volume in drive C has no label.
- Directory of C:\\Users\\admin
-
-06/20/2026  08:30    <DIR>          .
-06/20/2026  08:30    <DIR>          ..
-06/15/2026  10:00    <DIR>          Desktop
-06/18/2026  14:30    <DIR>          Documents
-06/20/2026  08:00    <DIR>          Downloads
-               0 File(s)              0 bytes
-               5 Dir(s)  256,000,000,000 bytes free`;
-        }
-        if (cmd === 'systeminfo') {
-            return `OS Name:                   Microsoft Windows 11 Pro
-OS Version:                10.0.22631 Build 22631
-System Type:               x64-based PC
-Processor(s):              1 Processor(s) Installed.
-                           Intel(R) Core(TM) i5-12400
-Total Physical Memory:     16,384 MB
-Available Physical Memory: 8,192 MB`;
-        }
-        return `Command executed successfully. Output for: ${command}`;
-    },
-
     stopCommand() {
         this.toast('Đã dừng thực thi lệnh', 'warning');
-        document.getElementById('btn-execute-cmd').classList.remove('hidden');
-        document.getElementById('btn-stop-cmd').classList.add('hidden');
     },
 
     openRemoteDesktop() {
@@ -1265,10 +1045,8 @@ Available Physical Memory: 8,192 MB`;
     switchADTab(tab) {
         document.querySelectorAll('.ad-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.ad-tab-content').forEach(c => c.classList.remove('active'));
-
         document.querySelector(`.ad-tab[data-tab="${tab}"]`).classList.add('active');
         document.getElementById(`ad-tab-${tab}`).classList.add('active');
-
         this.closeADDetail();
 
         switch (tab) {
@@ -1280,130 +1058,95 @@ Available Physical Memory: 8,192 MB`;
 
     async loadADComputers() {
         const tbody = document.getElementById('ad-computers-body');
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="loading-spinner"></div><p>Đang tải...</p></td></tr>';
         try {
             const computers = await api.getADComputers();
-            this.renderADComputers(Array.isArray(computers) ? computers : (computers.computers || []));
+            const list = Array.isArray(computers) ? computers : (computers.computers || []);
+            this.renderADComputers(list);
         } catch (e) {
-            this.renderADComputers(this.getDemoADComputers());
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối Active Directory. Kiểm tra cấu hình AD trong Cài đặt.</p></td></tr>`;
         }
-    },
-
-    getDemoADComputers() {
-        return [
-            { name: 'PC-NV01', ip: '192.168.1.10', os: 'Windows 11 Pro', last_logon: '2026-06-20 08:30:00', enabled: true },
-            { name: 'PC-NV02', ip: '192.168.1.11', os: 'Windows 11 Pro', last_logon: '2026-06-20 08:28:00', enabled: true },
-            { name: 'PC-KT01', ip: '192.168.1.12', os: 'Windows 10 Pro', last_logon: '2026-06-19 18:00:00', enabled: true },
-            { name: 'PC-KT02', ip: '192.168.1.15', os: 'Windows 11 Pro', last_logon: '2026-06-20 08:25:00', enabled: true },
-            { name: 'PC-GD01', ip: '192.168.1.20', os: 'Windows 11 Enterprise', last_logon: '2026-06-20 08:30:00', enabled: true },
-            { name: 'SRV-DB01', ip: '192.168.1.25', os: 'Windows Server 2022', last_logon: 'N/A', enabled: true },
-            { name: 'SRV-WEB01', ip: '192.168.1.26', os: 'Windows Server 2022', last_logon: 'N/A', enabled: true },
-            { name: 'PC-OLD01', ip: '192.168.1.200', os: 'Windows 10 Pro', last_logon: '2026-04-01 10:00:00', enabled: false },
-        ];
     },
 
     renderADComputers(computers) {
         const tbody = document.getElementById('ad-computers-body');
         if (!computers || computers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><p>Không tìm thấy máy tính nào</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-desktop"></i><p>Không tìm thấy máy tính nào trong Active Directory</p></td></tr>';
             return;
         }
         tbody.innerHTML = computers.map(c => `
-            <tr onclick="App.showADComputerDetail('${c.name}')">
-                <td><strong>${c.name}</strong></td>
-                <td><code style="color:var(--cyan)">${c.ip || 'N/A'}</code></td>
-                <td>${c.os || 'N/A'}</td>
+            <tr onclick="App.showADComputerDetail('${this.escapeHtml(c.name)}')">
+                <td><strong>${this.escapeHtml(c.name)}</strong></td>
+                <td><code style="color:var(--cyan)">${this.escapeHtml(c.ip || 'N/A')}</code></td>
+                <td>${this.escapeHtml(c.os || 'N/A')}</td>
                 <td>${c.last_logon || 'N/A'}</td>
                 <td>${c.enabled
                     ? '<span class="status-dot online"></span>Kích hoạt'
                     : '<span class="status-dot offline"></span>Vô hiệu hóa'
                 }</td>
-                <td>
-                    <button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button>
-                </td>
+                <td><button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button></td>
             </tr>
         `).join('');
     },
 
     async loadADUsers() {
+        const tbody = document.getElementById('ad-users-body');
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="loading-spinner"></div><p>Đang tải...</p></td></tr>';
         try {
             const users = await api.getADUsers();
-            this.renderADUsers(Array.isArray(users) ? users : (users.users || []));
+            const list = Array.isArray(users) ? users : (users.users || []);
+            this.renderADUsers(list);
         } catch (e) {
-            this.renderADUsers(this.getDemoADUsers());
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối Active Directory</p></td></tr>`;
         }
-    },
-
-    getDemoADUsers() {
-        return [
-            { username: 'admin', full_name: 'Quản trị viên', email: 'admin@company.local', dept: 'IT', enabled: true },
-            { username: 'nguyenvan', full_name: 'Nguyễn Văn A', email: 'nguyenvan@company.local', dept: 'Kế toán', enabled: true },
-            { username: 'tranthi', full_name: 'Trần Thị B', email: 'tranthi@company.local', dept: 'Nhân sự', enabled: true },
-            { username: 'leminh', full_name: 'Lê Minh C', email: 'leminh@company.local', dept: 'Kế toán', enabled: true },
-            { username: 'phamquoc', full_name: 'Phạm Quốc D', email: 'phamquoc@company.local', dept: 'Giám đốc', enabled: true },
-            { username: 'hoangduc', full_name: 'Hoàng Đức E', email: 'hoangduc@company.local', dept: 'Kỹ thuật', enabled: true },
-            { username: 'vuvan', full_name: 'Vũ Văn F', email: 'vuvan@company.local', dept: 'Kinh doanh', enabled: false },
-        ];
     },
 
     renderADUsers(users) {
         const tbody = document.getElementById('ad-users-body');
         if (!users || users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><p>Không tìm thấy người dùng</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-user"></i><p>Không tìm thấy người dùng nào trong Active Directory</p></td></tr>';
             return;
         }
         tbody.innerHTML = users.map(u => `
             <tr>
-                <td><strong>${u.username}</strong></td>
-                <td>${u.full_name || 'N/A'}</td>
-                <td>${u.email || 'N/A'}</td>
-                <td>${u.dept || 'N/A'}</td>
-                <td>${u.enabled
+                <td><strong>${this.escapeHtml(u.username || u.sAMAccountName || 'N/A')}</strong></td>
+                <td>${this.escapeHtml(u.full_name || u.displayName || 'N/A')}</td>
+                <td>${this.escapeHtml(u.email || u.mail || 'N/A')}</td>
+                <td>${this.escapeHtml(u.dept || u.department || 'N/A')}</td>
+                <td>${u.enabled !== false
                     ? '<span class="status-dot online"></span>Kích hoạt'
                     : '<span class="status-dot offline"></span>Khóa'
                 }</td>
-                <td>
-                    <button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button>
-                    <button class="btn-icon" title="Chỉnh sửa"><i class="fas fa-pen"></i></button>
-                </td>
+                <td><button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button></td>
             </tr>
         `).join('');
     },
 
     async loadADGroups() {
+        const tbody = document.getElementById('ad-groups-body');
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="loading-spinner"></div><p>Đang tải...</p></td></tr>';
         try {
             const groups = await api.getADGroups();
-            this.renderADGroups(Array.isArray(groups) ? groups : (groups.groups || []));
+            const list = Array.isArray(groups) ? groups : (groups.groups || []);
+            this.renderADGroups(list);
         } catch (e) {
-            this.renderADGroups(this.getDemoADGroups());
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối Active Directory</p></td></tr>`;
         }
-    },
-
-    getDemoADGroups() {
-        return [
-            { name: 'Domain Admins', description: 'Nhóm quản trị viên domain', members: 3, type: 'Security' },
-            { name: 'Domain Users', description: 'Tất cả người dùng domain', members: 25, type: 'Security' },
-            { name: 'IT-Department', description: 'Phòng Công nghệ thông tin', members: 5, type: 'Distribution' },
-            { name: 'Accounting', description: 'Phòng Kế toán', members: 4, type: 'Distribution' },
-            { name: 'HR', description: 'Phòng Nhân sự', members: 3, type: 'Distribution' },
-            { name: 'Management', description: 'Ban giám đốc', members: 2, type: 'Distribution' },
-        ];
     },
 
     renderADGroups(groups) {
         const tbody = document.getElementById('ad-groups-body');
         if (!groups || groups.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không tìm thấy nhóm nào</p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-users"></i><p>Không tìm thấy nhóm nào trong Active Directory</p></td></tr>';
             return;
         }
         tbody.innerHTML = groups.map(g => `
             <tr>
-                <td><strong>${g.name}</strong></td>
-                <td>${g.description || 'N/A'}</td>
-                <td>${g.members}</td>
-                <td><span class="badge badge-${g.type === 'Security' ? 'admin' : 'user'}">${g.type}</span></td>
-                <td>
-                    <button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button>
-                </td>
+                <td><strong>${this.escapeHtml(g.name || g.cn || 'N/A')}</strong></td>
+                <td>${this.escapeHtml(g.description || 'N/A')}</td>
+                <td>${g.members || g.member_count || 0}</td>
+                <td><span class="badge badge-${g.type === 'Security' ? 'admin' : 'user'}">${g.type || 'N/A'}</span></td>
+                <td><button class="btn-icon" title="Xem chi tiết"><i class="fas fa-eye"></i></button></td>
             </tr>
         `).join('');
     },
@@ -1421,29 +1164,19 @@ Available Physical Memory: 8,192 MB`;
             if (results.users) this.renderADUsers(results.users);
             if (results.groups) this.renderADGroups(results.groups);
         } catch (e) {
-            // Demo search
-            const allComputers = this.getDemoADComputers();
-            const filtered = allComputers.filter(c =>
-                c.name.toLowerCase().includes(query.toLowerCase()) ||
-                (c.ip && c.ip.includes(query))
-            );
-            this.renderADComputers(filtered);
-
-            const allUsers = this.getDemoADUsers();
-            const filteredUsers = allUsers.filter(u =>
-                u.username.toLowerCase().includes(query.toLowerCase()) ||
-                u.full_name.toLowerCase().includes(query.toLowerCase())
-            );
-            this.renderADUsers(filteredUsers);
+            this.toast('Lỗi tìm kiếm AD: ' + e.message, 'error');
         }
     },
 
     async refreshAD() {
-        this.switchADTab(document.querySelector('.ad-tab.active').dataset.tab);
+        const activeTab = document.querySelector('.ad-tab.active');
+        if (activeTab) {
+            this.switchADTab(activeTab.dataset.tab);
+        }
         this.toast('Đã làm mới dữ liệu Active Directory', 'success');
     },
 
-    showADComputerDetail(name) {
+    async showADComputerDetail(name) {
         const panel = document.getElementById('ad-detail-panel');
         panel.classList.remove('hidden');
         document.getElementById('ad-detail-title').innerHTML = `<i class="fas fa-desktop"></i> Chi tiết máy tính - ${name}`;
@@ -1451,21 +1184,23 @@ Available Physical Memory: 8,192 MB`;
         const content = document.getElementById('ad-detail-content');
         content.innerHTML = '<div class="loading-spinner"></div>';
 
-        // Demo data
-        setTimeout(() => {
+        try {
+            const detail = await api.getADComputerDetail(name);
             content.innerHTML = `
                 <div class="detail-grid">
-                    <div class="detail-item"><label>Tên máy</label><span>${name}</span></div>
-                    <div class="detail-item"><label>Địa chỉ IP</label><span>192.168.1.${Math.floor(Math.random() * 254) + 1}</span></div>
-                    <div class="detail-item"><label>Hệ điều hành</label><span>Windows 11 Pro</span></div>
-                    <div class="detail-item"><label>Version</label><span>23H2 (Build 22631)</span></div>
-                    <div class="detail-item"><label>Domain</label><span>COMPANY.LOCAL</span></div>
-                    <div class="detail-item"><label>Organizational Unit</label><span>OU=Workstations,DC=company,DC=local</span></div>
-                    <div class="detail-item"><label>Ngày tạo</label><span>2024-03-15</span></div>
-                    <div class="detail-item"><label>Lần đăng nhập cuối</label><span>2026-06-20 08:30:00</span></div>
+                    <div class="detail-item"><label>Tên máy</label><span>${this.escapeHtml(detail.name || name)}</span></div>
+                    <div class="detail-item"><label>Địa chỉ IP</label><span>${this.escapeHtml(detail.ip || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Hệ điều hành</label><span>${this.escapeHtml(detail.os || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Domain</label><span>${this.escapeHtml(detail.domain || 'N/A')}</span></div>
+                    <div class="detail-item"><label>OU</label><span>${this.escapeHtml(detail.ou || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Ngày tạo</label><span>${detail.whenCreated || 'N/A'}</span></div>
+                    <div class="detail-item"><label>Nhóm</label><span>${(detail.groups || []).join(', ') || 'N/A'}</span></div>
+                    <div class="detail-item"><label>Trạng thái</label><span>${detail.enabled ? 'Kích hoạt' : 'Vô hiệu hóa'}</span></div>
                 </div>
             `;
-        }, 500);
+        } catch (e) {
+            content.innerHTML = `<div class="detail-grid"><p style="color:var(--text-muted)">Không thể tải chi tiết: ${e.message}</p></div>`;
+        }
     },
 
     closeADDetail() {
@@ -1489,7 +1224,7 @@ Available Physical Memory: 8,192 MB`;
                 if (settings.ad_bind_dn) document.getElementById('setting-ad-bind-dn').value = settings.ad_bind_dn;
             }
         } catch (e) {
-            // Use default values
+            // Default values already in HTML
         }
     },
 
@@ -1505,7 +1240,7 @@ Available Physical Memory: 8,192 MB`;
             await api.updateSettings(settings);
             this.toast('Đã lưu cài đặt quét mạng', 'success');
         } catch (e) {
-            this.toast('Đã lưu cài đặt (chế độ demo)', 'info');
+            this.toast('Lỗi lưu cài đặt: ' + e.message, 'error');
         }
     },
 
@@ -1522,7 +1257,7 @@ Available Physical Memory: 8,192 MB`;
             await api.updateSettings(settings);
             this.toast('Đã lưu cài đặt Active Directory', 'success');
         } catch (e) {
-            this.toast('Đã lưu cài đặt (chế độ demo)', 'info');
+            this.toast('Lỗi lưu cài đặt: ' + e.message, 'error');
         }
     },
 
@@ -1576,15 +1311,12 @@ Available Physical Memory: 8,192 MB`;
         };
 
         toast.innerHTML = `<i class="${icons[type] || icons.info}"></i><span>${message}</span>`;
-
         toast.addEventListener('click', () => {
             toast.classList.add('removing');
             setTimeout(() => toast.remove(), 300);
         });
 
         container.appendChild(toast);
-
-        // Auto-remove after 5 seconds
         setTimeout(() => {
             if (toast.parentNode) {
                 toast.classList.add('removing');

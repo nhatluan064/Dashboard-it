@@ -11,7 +11,7 @@ class Config:
     """Main configuration class."""
 
     # Flask settings
-    SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+    SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "it-dashboard-flask-secret-2026")
     DEBUG = os.environ.get("FLASK_DEBUG", "True").lower() == "true"
     HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
     PORT = int(os.environ.get("FLASK_PORT", 5000))
@@ -25,8 +25,8 @@ class Config:
     SESSION_USE_SIGNER = True
     PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
 
-    # JWT settings
-    JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
+    # JWT settings - persistent secret
+    JWT_SECRET = os.environ.get("JWT_SECRET", "it-dashboard-jwt-secret-key-2026")
     JWT_EXPIRY_HOURS = int(os.environ.get("JWT_EXPIRY_HOURS", 8))
 
     # Auth settings - Admin user store (file-based for simplicity)
