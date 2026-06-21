@@ -209,6 +209,18 @@ class APIClient {
     async updateSettings(settings) {
         return await this.put('/api/settings', settings);
     }
+
+    // ================================================================
+    // TOPOLOGY API
+    // ================================================================
+
+    async getTopology() {
+        try { return await this.get('/api/topology'); } catch (e) { return { nodes: [], links: [] }; }
+    }
+
+    async saveTopology(topology) {
+        return await this.post('/api/topology', topology);
+    }
 }
 
 class APIError extends Error {

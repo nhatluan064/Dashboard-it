@@ -27,14 +27,20 @@ if %errorlevel% neq 0 (
     echo.
 )
 
+echo [OK] Dang check xem port 5000 co bi chiem dung khong...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000 ^| findstr LISTENING') do (
+    echo [WARNING] Port 5000 dang bi chiem boi PID %%a. Dang giai phong port...
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 echo.
 echo [OK] Dang khoi dong server...
-echo [OK] Mo truy duyet web: http://127.0.0.1:5000
+echo [OK] Mo trinh duyet web: http://127.0.0.1:5000
 echo [OK] Nhan Ctrl+C de dung server
 echo.
 
-:: Tu dong mo trinh duyet sau 2 giay
-start "" /b cmd /c "timeout /t 2 >nul && start http://127.0.0.1:5000"
+:: Tu dong mo trinh duyet sau 3 giay (dung ping de delay an toan hon timeout)
+start "" /b cmd /c "ping 127.0.0.1 -n 4 >nul && start http://127.0.0.1:5000"
 
 :: Chay Flask server
 python app.py

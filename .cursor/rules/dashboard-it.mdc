@@ -1,0 +1,40 @@
+---
+description: IT Dashboard project context — đọc trước khi code
+alwaysApply: true
+---
+
+# IT Dashboard — Project Rules
+
+Dự án: **IT Dashboard Management System** (Flask + Vanilla JS SPA, Windows-only).
+
+## Trước khi sửa code
+
+1. Đọc `PROJECT_CONTEXT.md` (tiến độ, kiến trúc, API routes)
+2. Tra cứu `.cursor/VARIABLES.md` (tên biến, DOM id, JSON schema)
+3. Skill chi tiết: `.cursor/skills/dashboard-it/SKILL.md`
+
+## Quy ước bắt buộc
+
+- **Không demo data** — mọi dữ liệu từ API thật
+- Backend JSON field: `snake_case` | Frontend state: `camelCase` | DOM id: `kebab-case`
+- API response: `{ success, message?, ... }`
+- UI labels: Tiếng Việt
+- Auth: `@token_required` (user) hoặc `@admin_required` (admin actions)
+- Escape user input: `App.escapeHtml()` khi render HTML
+
+## File chính
+
+| Layer | Files |
+|-------|-------|
+| Routes | `backend/app.py` |
+| Config | `backend/config.py` |
+| Modules | `backend/modules/*.py` |
+| API client | `frontend/js/api.js` |
+| App logic | `frontend/js/app.js` |
+| UI | `frontend/index.html`, `frontend/css/style.css` |
+
+## Endpoint chưa có backend (đừng giả định đã tồn tại)
+
+- `/api/settings`, `/api/activity/recent`, user CRUD API
+
+Khi user yêu cầu tính năng liên quan → implement backend trước, rồi frontend.

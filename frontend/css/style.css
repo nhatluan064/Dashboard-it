@@ -2074,3 +2074,65 @@ a:hover { color: var(--accent-hover); }
         padding: 32px 24px;
     }
 }
+
+/* ============================================================
+   TOPOLOGY MAP
+   ============================================================ */
+.topology-card { overflow: hidden; }
+.topology-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.topology-container { padding: 16px; }
+.topology-instructions { display:flex; gap:10px; align-items:flex-start; margin-bottom:12px; color:var(--text-secondary); font-size:13px; }
+.topology-workspace {
+    position: relative;
+    width: 100%;
+    min-height: 720px;
+    background: radial-gradient(circle at 20% 20%, rgba(57,210,192,0.06), transparent 25%),
+                linear-gradient(180deg, rgba(22,33,62,0.92), rgba(13,17,23,0.95));
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+.topology-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.topology-link { stroke-width: 3; stroke-linecap: round; fill:none; opacity:.85; }
+.topology-link.online { stroke: var(--green-light); stroke-dasharray: 10 10; animation: topology-flow 1.2s linear infinite; }
+.topology-link.offline { stroke: var(--red-light); stroke-dasharray: 6 10; }
+.topology-link.pulse-a { opacity: 1; }
+@keyframes topology-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -40; } }
+.topology-link-offline-text { fill: var(--red-light); font-size: 26px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; }
+.topology-node {
+    position:absolute;
+    width: 200px;
+    min-height: 72px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding: 12px;
+    background: rgba(22,33,62,.95);
+    border:1px solid var(--border-light);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    cursor: grab;
+    user-select:none;
+    z-index: 2;
+}
+.topology-node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow), var(--shadow-lg); }
+.topology-node.online { border-left: 4px solid var(--green-light); }
+.topology-node.offline { border-left: 4px solid var(--red-light); opacity: .82; }
+.topology-node-icon {
+    width: 46px; height: 46px; border-radius: 12px;
+    display:flex; align-items:center; justify-content:center;
+    background: color-mix(in srgb, var(--node-color) 18%, transparent);
+    color: var(--node-color); font-size: 20px;
+}
+.topology-node-body { flex:1; min-width: 0; }
+.topology-node-title { font-weight:700; font-size:14px; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.topology-node-sub { font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.topology-node-status { width:10px; height:10px; border-radius:50%; align-self:flex-start; margin-top:4px; box-shadow: 0 0 10px currentColor; }
+.topology-node-status.online { color: var(--green-light); background: var(--green-light); }
+.topology-node-status.offline { color: var(--red-light); background: var(--red-light); }
+.offline-x { position:absolute; right:12px; top:10px; color: var(--red-light); font-weight:800; font-size:18px; }
+@media (max-width: 768px) {
+    .topology-actions { width:100%; }
+    .topology-workspace { min-height: 520px; }
+    .topology-node { width: 180px; }
+}

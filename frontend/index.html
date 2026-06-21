@@ -101,6 +101,10 @@
                     <i class="fas fa-server"></i>
                     <span>Thiết bị</span>
                 </a>
+                <a href="#topology" class="nav-item" data-page="topology">
+                    <i class="fas fa-project-diagram"></i>
+                    <span>Sơ đồ mạng 2D</span>
+                </a>
                 <a href="#scan" class="nav-item" data-page="scan">
                     <i class="fas fa-network-wired"></i>
                     <span>Quét mạng</span>
@@ -314,6 +318,43 @@
                         <div class="table-footer">
                             <span id="device-count">0 thiết bị</span>
                             <div class="pagination" id="device-pagination"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TOPOLOGY PAGE ========== -->
+                <div id="page-topology" class="page">
+                    <div class="card topology-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-project-diagram"></i> Sơ đồ mạng 2D trực quan</h3>
+                            <div class="topology-actions">
+                                <button class="btn-primary" onclick="App.showAddNodeModal()">
+                                    <i class="fas fa-plus"></i> Thêm thiết bị
+                                </button>
+                                <button class="btn-outline" onclick="App.showAddLinkModal()">
+                                    <i class="fas fa-link"></i> Thêm liên kết
+                                </button>
+                                <button class="btn-success" onclick="App.saveTopology()">
+                                    <i class="fas fa-save"></i> Lưu sơ đồ
+                                </button>
+                                <button class="btn-danger" onclick="App.clearTopology()">
+                                    <i class="fas fa-trash-alt"></i> Xóa tất cả
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="topology-container">
+                            <div class="topology-instructions">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Kéo thả thiết bị để sắp xếp sơ đồ. Đường truyền nhấp nháy biểu thị trạng thái Online và truyền tải dữ liệu. Đường đứt đoạn màu đỏ kèm chữ X là thiết bị Offline.</span>
+                            </div>
+                            
+                            <div class="topology-workspace" id="topology-workspace">
+                                <!-- SVG overlay for drawing connection lines -->
+                                <svg class="topology-svg" id="topology-svg"></svg>
+                                
+                                <!-- Nodes will be rendered dynamically here -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -780,6 +821,76 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Node Modal -->
+    <div id="add-node-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="App.closeAddNodeModal()"></div>
+        <div class="modal-container modal-medium">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus"></i> Thêm thiết bị vào sơ đồ</h3>
+                <button class="modal-close" onclick="App.closeAddNodeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="topology-node-type">Loại thiết bị</label>
+                    <select id="topology-node-type" class="filter-select">
+                        <option value="wifi">Wifi</option>
+                        <option value="firewall">Firewall</option>
+                        <option value="server">Server</option>
+                        <option value="router">Router</option>
+                        <option value="switch">SW</option>
+                        <option value="core-switch">SW Core</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="topology-node-name">Tên thiết bị</label>
+                    <input type="text" id="topology-node-name" placeholder="Ví dụ: SW-01">
+                </div>
+                <div class="form-group">
+                    <label for="topology-node-ip">IP / Host</label>
+                    <input type="text" id="topology-node-ip" placeholder="Ví dụ: 192.168.1.10">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="topology-node-auto-link" checked> Tự động nối với node cha (nếu có)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="App.closeAddNodeModal()">Hủy</button>
+                <button class="btn-primary" onclick="App.addTopologyNode()">Thêm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Link Modal -->
+    <div id="add-link-modal" class="modal hidden">
+        <div class="modal-overlay" onclick="App.closeAddLinkModal()"></div>
+        <div class="modal-container modal-medium">
+            <div class="modal-header">
+                <h3><i class="fas fa-link"></i> Thêm liên kết</h3>
+                <button class="modal-close" onclick="App.closeAddLinkModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="topology-link-source">Node nguồn</label>
+                    <select id="topology-link-source" class="filter-select"></select>
+                </div>
+                <div class="form-group">
+                    <label for="topology-link-target">Node đích</label>
+                    <select id="topology-link-target" class="filter-select"></select>
+                </div>
+                <div class="form-group">
+                    <label for="topology-link-label">Ghi chú (tuỳ chọn)</label>
+                    <input type="text" id="topology-link-label" placeholder="Ví dụ: uplink / trunk / wifi link">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="App.closeAddLinkModal()">Hủy</button>
+                <button class="btn-primary" onclick="App.addTopologyLink()">Tạo liên kết</button>
             </div>
         </div>
     </div>

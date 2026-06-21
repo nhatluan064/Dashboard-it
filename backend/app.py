@@ -402,6 +402,38 @@ def create_app():
         return jsonify(result), status_code
 
     # ========================================================================
+    # TOPOLOGY ROUTES
+    # ========================================================================
+
+    topology_file = os.path.join(os.path.dirname(__file__), "topology.json")
+
+    @app.route("/api/topology", methods=["GET"])
+    @token_required
+    def get_topology():
+        if os.path.exists(topology_file):
+            try:
+                with open(topology_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {"nodes": [], "links": []}
+        else:
+            data = {"nodes": [], "links": []}
+        return jsonify({"success": True, "topology": data})
+
+    @app.route("/api/topology", methods=["POST"])
+    @token_required
+    def save_topology():
+        data = request.get_json() or {}
+        topology = {
+            "nodes": data.get("nodes", []),
+            "links": data.get("links", []),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(topology_file, "w", encoding="utf-8") as f:
+            json.dump(topology, f, ensure_ascii=False, indent=2)
+        return jsonify({"success": True, "message": "Topology saved", "topology": topology})
+
+    # ========================================================================
     # ERROR HANDLERS
     # ========================================================================
 

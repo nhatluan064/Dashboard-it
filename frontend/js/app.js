@@ -17,6 +17,34 @@ const App = {
     sortColumn: null,
     sortDirection: 'asc',
     charts: {},
+    topology: { nodes: [], links: [] },
+    dragState: null,
+    selectedTopologyNodeId: null,
+    selectedTopologyLinkId: null,
+    topologyRendered: false,
+    topologyCanvasSize: { width: 0, height: 0 },
+    topologyAnimationTimer: null,
+    topologySaveTimer: null,
+    topologyLoadPromise: null,
+    topologySeeded: false,
+    topologyMapByIp: new Map(),
+    topologyLayoutLoaded: false,
+    topologyNodeCounter: 0,
+    topologyLinkCounter: 0,
+    topologyDirty: false,
+    topologyStatusTimer: null,
+    topologyMode: 'edit',
+    topologyMessage: '',
+    topologyLastSaveAt: null,
+    topologyLastLoadAt: null,
+    topologyNodesEl: null,
+    topologySvgEl: null,
+    topologyWorkspaceEl: null,
+    topologyEdgesEl: null,
+    topologySelectedTool: 'select',
+    topologyTempLinkStart: null,
+    topologyTempLinkEnd: null,
+    topologyAutoLayout: true,
 
     // ================================================================
     // INITIALIZATION
@@ -197,6 +225,7 @@ const App = {
         const titles = {
             dashboard: 'Dashboard',
             devices: 'Thiết bị',
+            topology: 'Sơ đồ mạng 2D',
             scan: 'Quét mạng',
             remote: 'Remote Control',
             ad: 'Active Directory',
@@ -212,6 +241,7 @@ const App = {
         switch (page) {
             case 'dashboard': this.loadDashboard(); break;
             case 'devices': this.loadDevices(); break;
+            case 'topology': this.loadTopologyPage(); break;
             case 'scan': break;
             case 'remote': this.loadRemoteDevices(); break;
             case 'ad': this.loadADComputers(); break;
@@ -1255,6 +1285,274 @@ const App = {
 
     closeADDetail() {
         document.getElementById('ad-detail-panel').classList.add('hidden');
+    },
+
+    // ================================================================
+    // TOPOLOGY MAP
+    // ================================================================
+
+    async loadTopologyPage() {
+        await this.initTopology();
+        this.renderTopology();
+        this.bindTopologyWorkspace();
+    },
+
+    async initTopology() {
+        if (this.topologyLoadPromise) return this.topologyLoadPromise;
+        this.topologyLoadPromise = (async () => {
+            try {
+                const data = await api.getTopology();
+                this.topology = data.topology || data || { nodes: [], links: [] };
+            } catch (e) {
+                this.topology = { nodes: [], links: [] };
+            }
+            this.ensureTopologySeed();
+            this.reindexTopology();
+            this.topologyLayoutLoaded = true;
+            this.topologyLastLoadAt = new Date().toISOString();
+        })();
+        return this.topologyLoadPromise;
+    },
+
+    ensureTopologySeed() {
+        if (this.topologySeeded || (this.topology.nodes && this.topology.nodes.length)) return;
+        const existing = this.devices || [];
+        const seed = [];
+        const seen = new Set();
+        const add = (node) => {
+            if (!node.ip || seen.has(node.ip)) return;
+            seen.add(node.ip);
+            seed.push(node);
+        };
+        existing.slice(0, 12).forEach((d, i) => add({
+            id: `seed-${i + 1}`,
+            type: this.inferTopologyType(d),
+            name: d.hostname || d.device_name || d.ip,
+            ip: d.ip,
+            x: 120 + (i % 4) * 220,
+            y: 120 + Math.floor(i / 4) * 170,
+            status: (d.status || d.reachable || d.online) ? 'online' : 'offline'
+        }));
+        this.topology.nodes = seed;
+        this.topology.links = this.buildDefaultLinks(seed);
+        this.topologySeeded = true;
+    },
+
+    buildDefaultLinks(nodes) {
+        const links = [];
+        const switches = nodes.filter(n => ['switch', 'core-switch'].includes(n.type));
+        const hubs = switches.length ? switches : nodes.slice(0, 1);
+        nodes.forEach((n) => {
+            if (hubs[0] && n.id !== hubs[0].id) {
+                links.push({ id: `link-${hubs[0].id}-${n.id}`, source: hubs[0].id, target: n.id, label: '' });
+            }
+        });
+        return links;
+    },
+
+    inferTopologyType(device) {
+        const text = `${device.hostname || ''} ${device.device_name || ''} ${device.type || ''}`.toLowerCase();
+        if (text.includes('wifi') || text.includes('ap')) return 'wifi';
+        if (text.includes('firewall')) return 'firewall';
+        if (text.includes('server')) return 'server';
+        if (text.includes('router')) return 'router';
+        if (text.includes('core')) return 'core-switch';
+        if (text.includes('sw') || text.includes('switch')) return 'switch';
+        return 'server';
+    },
+
+    topologyTypeMeta(type) {
+        const meta = {
+            wifi: { label: 'Wifi', icon: 'fa-wifi', color: '#8b5cf6' },
+            firewall: { label: 'Firewall', icon: 'fa-shield-halved', color: '#f97316' },
+            server: { label: 'Server', icon: 'fa-server', color: '#22c55e' },
+            router: { label: 'Router', icon: 'fa-route', color: '#38bdf8' },
+            switch: { label: 'SW', icon: 'fa-network-wired', color: '#e94560' },
+            'core-switch': { label: 'SW Core', icon: 'fa-diagram-project', color: '#f59e0b' }
+        };
+        return meta[type] || meta.server;
+    },
+
+    reindexTopology() {
+        this.topologyMapByIp = new Map();
+        (this.topology.nodes || []).forEach(n => { if (n.ip) this.topologyMapByIp.set(n.ip, n); });
+        this.topologyNodeCounter = (this.topology.nodes || []).length;
+        this.topologyLinkCounter = (this.topology.links || []).length;
+    },
+
+    renderTopology() {
+        const workspace = document.getElementById('topology-workspace');
+        const svg = document.getElementById('topology-svg');
+        if (!workspace || !svg) return;
+        this.topologyWorkspaceEl = workspace;
+        this.topologySvgEl = svg;
+        workspace.innerHTML = '';
+        workspace.appendChild(svg);
+        svg.innerHTML = '';
+        const rect = workspace.getBoundingClientRect();
+        svg.setAttribute('width', rect.width || workspace.clientWidth || 1200);
+        svg.setAttribute('height', rect.height || workspace.clientHeight || 700);
+        this.topologyCanvasSize = { width: rect.width || workspace.clientWidth || 1200, height: rect.height || workspace.clientHeight || 700 };
+        this.renderTopologyLinks();
+        this.renderTopologyNodes();
+        this.ensureTopologyAnimation();
+    },
+
+    renderTopologyNodes() {
+        const workspace = document.getElementById('topology-workspace');
+        if (!workspace) return;
+        (this.topology.nodes || []).forEach(node => {
+            const meta = this.topologyTypeMeta(node.type);
+            const el = document.createElement('div');
+            el.className = `topology-node ${node.status === 'offline' ? 'offline' : 'online'}`;
+            el.dataset.id = node.id;
+            el.style.left = `${node.x}px`;
+            el.style.top = `${node.y}px`;
+            el.innerHTML = `
+                <div class="topology-node-icon" style="--node-color:${meta.color}"><i class="fas ${meta.icon}"></i></div>
+                <div class="topology-node-body">
+                    <div class="topology-node-title">${this.escapeHtml(node.name || node.ip || 'Device')}</div>
+                    <div class="topology-node-sub">${meta.label} • ${this.escapeHtml(node.ip || '')}</div>
+                </div>
+                <div class="topology-node-status ${node.status === 'offline' ? 'offline' : 'online'}"></div>
+                ${node.status === 'offline' ? '<div class="offline-x">X</div>' : ''}
+            `;
+            el.addEventListener('pointerdown', (e) => this.startTopologyDrag(e, node.id));
+            el.addEventListener('click', () => this.selectTopologyNode(node.id));
+            workspace.appendChild(el);
+        });
+    },
+
+    renderTopologyLinks() {
+        const svg = document.getElementById('topology-svg');
+        if (!svg) return;
+        const nodesById = new Map((this.topology.nodes || []).map(n => [n.id, n]));
+        (this.topology.links || []).forEach(link => {
+            const s = nodesById.get(link.source);
+            const t = nodesById.get(link.target);
+            if (!s || !t) return;
+            const x1 = s.x + 100, y1 = s.y + 36;
+            const x2 = t.x + 100, y2 = t.y + 36;
+            const status = s.status === 'offline' || t.status === 'offline' ? 'offline' : 'online';
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+            line.setAttribute('class', `topology-link ${status}`);
+            line.dataset.linkId = link.id;
+            svg.appendChild(line);
+            if (status === 'offline') {
+                const mid = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                mid.setAttribute('x', (x1 + x2) / 2);
+                mid.setAttribute('y', (y1 + y2) / 2);
+                mid.setAttribute('class', 'topology-link-offline-text');
+                mid.textContent = 'X';
+                svg.appendChild(mid);
+            }
+        });
+    },
+
+    ensureTopologyAnimation() {
+        clearInterval(this.topologyAnimationTimer);
+        this.topologyAnimationTimer = setInterval(() => {
+            document.querySelectorAll('.topology-link.online').forEach((line, i) => {
+                line.classList.toggle('pulse-a', (Date.now() / 600 + i) % 2 < 1);
+            });
+        }, 600);
+    },
+
+    bindTopologyWorkspace() {
+        const workspace = document.getElementById('topology-workspace');
+        if (!workspace || workspace._bound) return;
+        workspace._bound = true;
+        window.addEventListener('resize', () => this.renderTopology());
+    },
+
+    startTopologyDrag(e, id) {
+        e.preventDefault();
+        const node = (this.topology.nodes || []).find(n => n.id === id);
+        if (!node) return;
+        const startX = e.clientX, startY = e.clientY;
+        const origX = node.x, origY = node.y;
+        const move = (ev) => {
+            node.x = Math.max(10, origX + (ev.clientX - startX));
+            node.y = Math.max(10, origY + (ev.clientY - startY));
+            this.renderTopology();
+            this.topologyDirty = true;
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            this.saveTopologyDebounced();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+    },
+
+    selectTopologyNode(id) {
+        this.selectedTopologyNodeId = id;
+        document.querySelectorAll('.topology-node').forEach(n => n.classList.toggle('selected', n.dataset.id === id));
+    },
+
+    showAddNodeModal() { document.getElementById('add-node-modal').classList.remove('hidden'); },
+    closeAddNodeModal() { document.getElementById('add-node-modal').classList.add('hidden'); },
+    showAddLinkModal() { this.populateTopologyLinkSelectors(); document.getElementById('add-link-modal').classList.remove('hidden'); },
+    closeAddLinkModal() { document.getElementById('add-link-modal').classList.add('hidden'); },
+
+    populateTopologyLinkSelectors() {
+        const s = document.getElementById('topology-link-source');
+        const t = document.getElementById('topology-link-target');
+        const options = (this.topology.nodes || []).map(n => `<option value="${n.id}">${this.escapeHtml(n.name || n.ip)}</option>`).join('');
+        if (s) s.innerHTML = options;
+        if (t) t.innerHTML = options;
+    },
+
+    addTopologyNode() {
+        const type = document.getElementById('topology-node-type').value;
+        const name = document.getElementById('topology-node-name').value.trim();
+        const ip = document.getElementById('topology-node-ip').value.trim();
+        const id = `node-${Date.now()}`;
+        this.topology.nodes.push({ id, type, name: name || ip || id, ip, x: 80 + (this.topology.nodes.length % 5) * 200, y: 90 + Math.floor(this.topology.nodes.length / 5) * 150, status: this.topologyMapByIp.get(ip)?.status || 'online' });
+        this.reindexTopology();
+        this.closeAddNodeModal();
+        this.renderTopology();
+        this.saveTopologyDebounced();
+    },
+
+    addTopologyLink() {
+        const source = document.getElementById('topology-link-source').value;
+        const target = document.getElementById('topology-link-target').value;
+        if (!source || !target || source === target) return;
+        this.topology.links.push({ id: `link-${Date.now()}`, source, target, label: document.getElementById('topology-link-label').value.trim() });
+        this.closeAddLinkModal();
+        this.renderTopology();
+        this.saveTopologyDebounced();
+    },
+
+    async saveTopology() {
+        try { await api.saveTopology(this.topology); this.topologyLastSaveAt = new Date().toISOString(); this.topologyDirty = false; this.toast('Đã lưu sơ đồ topology', 'success'); }
+        catch (e) { this.toast('Lỗi lưu topology: ' + e.message, 'error'); }
+    },
+
+    saveTopologyDebounced() {
+        clearTimeout(this.topologySaveTimer);
+        this.topologySaveTimer = setTimeout(() => this.saveTopology(), 1200);
+    },
+
+    clearTopology() {
+        this.showConfirmDialog('Bạn có chắc muốn xóa toàn bộ sơ đồ topology?', () => {
+            this.topology = { nodes: [], links: [] };
+            this.renderTopology();
+            this.saveTopology();
+        });
+    },
+
+    async refreshTopologyStatuses() {
+        const byIp = new Map((this.devices || []).map(d => [d.ip, d]));
+        (this.topology.nodes || []).forEach(n => {
+            const d = byIp.get(n.ip);
+            if (d) n.status = (d.status || d.reachable || d.online) ? 'online' : 'offline';
+        });
+        this.renderTopology();
     },
 
     // ================================================================
